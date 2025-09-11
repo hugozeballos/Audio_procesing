@@ -1,0 +1,3 @@
+in_path,out_path,sr,dur_in_s,dur_prep_s,dur_out_s,peak_in,peak_prep,peak_out,gain_prep_db,rtf,backend,preset,note
+data/raw/2025/09/08/5d4c7742b30af62c91777f92bdbaa267d5e4650e3c60e0833b39d81f5a16a679__250820_1542.mp3,enh\metricgan\medium\data\raw\2025\09\08\5d4c7742b30af62c91777f92bdbaa267d5e4650e3c60e0833b39d81f5a16a679__250820_1542.wav,44100,7.591,7.591,7.591,0.891235,0.891235,0.897259,0.000,0.075,metricgan,medium,metricgan:medium
+data/raw/2025/09/08/df5c7a3423dd07c7c527615359dcf78149587b1be39ec227e9a058012ed33c35__250714_1629.mp3,enh\metricgan\medium\data\raw\2025\09\08\df5c7a3423dd07c7c527615359dcf78149587b1be39ec227e9a058012ed33c35__250714_1629.wav,44100,9.221,9.221,9.221,0.791748,0.791748,0.892008,0.000,0.023,metricgan,medium,metricgan:medium

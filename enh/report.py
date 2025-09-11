@@ -4,7 +4,7 @@ import argparse, pathlib, sys
 import pandas as pd
 import numpy as np
 
-DEFAULT_METRICS = pathlib.Path(__file__).resolve().parent / "enh_metrics.csv"
+DEFAULT_METRICS = pathlib.Path(__file__).resolve().parent / "enh" / "enh_metrics.csv"
 
 def load_metrics(path: pathlib.Path) -> pd.DataFrame:
     if not path.exists():

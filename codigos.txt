@@ -17,3 +17,8 @@ deactivate
 
 ####PARA GENERAR LAS LISTAS DE AudIOS
 py .\preprocesing\gen_splits.py --dataset-dir dataset-audio-raw --dev-size 80 --test-size 0
+
+
+### en hydraa
+cd /workspace1/hugoz
+source .venv/bin/activate
