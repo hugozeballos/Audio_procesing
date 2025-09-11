@@ -21,4 +21,3 @@ py .\preprocesing\gen_splits.py --dataset-dir dataset-audio-raw --dev-size 80 --
 
 ### en hydraa
 cd /workspace1/hugoz
-source .venv/bin/activate
