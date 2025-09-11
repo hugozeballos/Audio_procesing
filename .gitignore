@@ -47,8 +47,6 @@ dataset-audio-raw/enh/*/*.csv
 **/*.ogg
 **/*.opus
 **/*.wma
-**/*.txt
-.txt
 # --- Permitidos explícitos (asegurar que se trackean) ---
 !dataset-audio-raw/manifests/
 !dataset-audio-raw/manifests/manifest.csv

@@ -1,0 +1,19 @@
+# 1) Crear
+python -m venv .venv
+
+# 2) Activar
+.\.venv\Scripts\Activate.ps1
+
+# 3) Actualizar pip y deps
+python -m pip install --upgrade pip
+pip install -r requirements.txt  # si lo tienes
+
+# 4) Verificar
+python -V
+pip -V
+
+# 5) Desactivar
+deactivate
+
+####PARA GENERAR LAS LISTAS DE AudIOS
+py .\preprocesing\gen_splits.py --dataset-dir dataset-audio-raw --dev-size 80 --test-size 0
