@@ -3,13 +3,12 @@ google-auth==2.34.0
 huggingface_hub==0.24.6
 tqdm==4.66.5
 python-dotenv==1.0.1
-pandas==2.2.2
+pandas==2.1.3
 pyopenssl==22.1.0 
 oauth2client==4.1.3 
 pydrive2
 google-auth-oauthlib
 soundfile
-pandas
 tqdm
 pystoi
 pyloudnorm
