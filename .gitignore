@@ -59,3 +59,11 @@ dataset-audio-raw/enh/*/*.csv
 *.7z
 *.tar
 *.tar.gz
+
+
+/artifacts/
+/logs/
+/.env
+
+!backends.txt
+!experiment_config.json

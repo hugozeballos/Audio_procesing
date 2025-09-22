@@ -20,5 +20,14 @@ py .\preprocesing\gen_splits.py --dataset-dir dataset-audio-raw --dev-size 80 --
 
 
 ### en hydraa
-cd /workspace1/hugoz
+cd /workspace1/hugoz/Audio_procesing/
 source .venv/bin/activate
+
+####
+ejecutar en hydraa# 1) Crear y activar venv en raíz si no existe
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt   # o tus deps
+
+# 2) Ejecutar
+bash pipeline_all_in_one.sh               # sin ingesta
+INGEST=1 bash pipeline_all_in_one.sh      # con ingesta
