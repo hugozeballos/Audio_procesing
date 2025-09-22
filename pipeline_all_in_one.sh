@@ -27,13 +27,24 @@ source cluster/env.sh
 # Parámetro opcional
 INGEST="${INGEST:-0}"
 
+# --- leer config sin jq ---
 CFG="config/experiment_config.json"
-DATASET_DIR=$(jq -r '.dataset_dir' "$CFG")
-DEV_SIZE=$(jq -r '.dev_size' "$CFG")
-TEST_SIZE=$(jq -r '.test_size' "$CFG")
-PREP_DIR=$(jq -r '.prepared_dev_dir' "$CFG")
-ENH_DIR=$(jq -r '.enh_out_dir' "$CFG")
-METRICS_OUT=$(jq -r '.metrics_out' "$CFG")
+
+json_get () {
+python - "$CFG" "$1" <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    cfg = json.load(f)
+print(cfg.get(sys.argv[2], ""))
+PY
+}
+
+DATASET_DIR="$(json_get dataset_dir)"
+DEV_SIZE="$(json_get dev_size)"
+TEST_SIZE="$(json_get test_size)"
+PREP_DIR="$(json_get prepared_dev_dir)"
+ENH_DIR="$(json_get enh_out_dir)"
+METRICS_OUT="$(json_get metrics_out)"
 mkdir -p "$PREP_DIR" "$ENH_DIR" "$(dirname "$METRICS_OUT")"
 
 # Backends
