@@ -28,6 +28,6 @@ ejecutar en hydraa# 1) Crear y activar venv en raíz si no existe
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt   # o tus deps
 
-# 2) Ejecutar
-bash pipeline_all_in_one.sh               # sin ingesta
+sh# 2) Ejecutar
+bash pipeline_all_in_one.               # sin ingesta
 INGEST=1 bash pipeline_all_in_one.sh      # con ingesta
