@@ -70,7 +70,7 @@ if [[ "$INGEST" == "1" ]]; then
   : "${DRIVE_FOLDER_ID:?falta DRIVE_FOLDER_ID}"
   : "${HF_TOKEN:?falta HF_TOKEN}"
   : "${HF_REPO_ID:?falta HF_REPO_ID}"
-  python ingest_drive_to_hf.py
+  python dataset-audio-raw/ingest_drive_to_hf.py
 fi
 
 # 3) Splits (idempotente)
