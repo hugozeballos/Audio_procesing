@@ -1,6 +1,6 @@
+resemble_enh:medium
 deepfilternet:medium
 metricgan:medium
 voicefixer:medium
-resemble_enh:medium
 sepformer:medium
 clearervoice:medium
