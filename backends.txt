@@ -1,3 +1,5 @@
-deepfilternet:medium
+metricgan:medium
+voicefixer:medium
 rnnoise:medium
 passthrough:medium
+deepfilternet:medium
