@@ -1,4 +1,2 @@
-metricgan:medium
-voicefixer:medium
 sepformer:medium
 clearervoice:medium

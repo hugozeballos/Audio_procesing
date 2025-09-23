@@ -31,3 +31,6 @@ pip install -r requirements.txt   # o tus deps
 sh# 2) Ejecutar
 bash pipeline_all_in_one.               # sin ingesta
 INGEST=1 bash pipeline_all_in_one.sh      # con ingesta
+
+
+git pull --ff-only

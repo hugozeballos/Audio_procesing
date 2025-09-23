@@ -21,11 +21,8 @@ class SepformerEnh(BackendBase):
         device = os.getenv("ENH_DEVICE", "cpu")
         run_opts = {"device": device}
         # descarga/carga del checkpoint
-        self.enh = SpectralMaskEnhancement.from_hparams(
-            source="speechbrain/sepformer-wham16k-enhancement",
-            savedir="~/.cache/speechbrain/sepformer_wham16k",
-            run_opts=run_opts
-        )
+        self.enh = SpectralMaskEnhancement.from_hparams(source="speechbrain/metricgan-plus-voicebank", run_opts={"device": self.device})
+
 
     @staticmethod
     def _to_mono(x: np.ndarray) -> np.ndarray:
