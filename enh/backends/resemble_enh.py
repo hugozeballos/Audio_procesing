@@ -74,11 +74,11 @@ class ResembleEnh:
             if self.cfg.denoise_first:
                 dwav, _ = r_denoise(wav, self.TARGET_SR, self.device)
                 dwav = dwav.squeeze().to(self.device)
-                enh, _ = r_enhance(dwav, self.TARGET_SR, self.device,
+                enh, _ = r_enhance(dwav, self.TARGET_SR, self.device, solver=self.cfg.solver.lower(),
                                    nfe=self.cfg.nfe, solver=self.cfg.solver,
                                    lambd=lambd, tau=self.cfg.tau)
             else:
-                enh, _ = r_enhance(wav, self.TARGET_SR, self.device,
+                enh, _ = r_enhance(wav, self.TARGET_SR, self.device, solver=self.cfg.solver.lower(),
                                    nfe=self.cfg.nfe, solver=self.cfg.solver,
                                    lambd=lambd, tau=self.cfg.tau)
 
