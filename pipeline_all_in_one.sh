@@ -91,17 +91,14 @@ for LINE in "${BACKENDS[@]}"; do
   OUT="$ENH_DIR/${B}_${P}"
   mkdir -p "$OUT"
   echo "  -> $B:$P  out=$OUT  device=${ENH_DEVICE:-cpu}"
-  ENH_DEVICE="${ENH_DEVICE:-cpu}" python enh/run_enh_dev.py \
-    --config "$CFG" \
-    --backend "$B" \
-    --preset "$P" \
-    --out "$OUT"
+  ENH_BACKEND="$B" ENH_PRESET="$P" ENH_DEVICE="${ENH_DEVICE:-cpu}" \
+  python enh/run_enh_dev.py
 done
 
 # 6) Métricas
 echo "[5] metrics"
 python enh/compute_metrics.py \
-  --input-dir "$ENH_DIR" \
-  --out "$METRICS_OUT"
+  --dataset-dir "$DATASET_DIR" \
+  --out-csv "$METRICS_OUT"
 
 echo "[done] Resultado: $METRICS_OUT"
