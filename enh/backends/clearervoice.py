@@ -27,6 +27,8 @@ PRESET2MODEL = {
 
 class ClearerVoiceBackend(BackendBase):
     """Usa ModelScope ClearerVoice vía API Python, sin CLI."""
+    name = "clearervoice"       # <-- agrega aquí, justo debajo de la docstring
+
     def __init__(self, device=None, preset=None):
         dev = os.getenv("ENH_DEVICE", "cuda" if device in ("cuda","gpu") else "cpu")
         super().__init__(device=dev)

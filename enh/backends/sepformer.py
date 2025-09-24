@@ -14,6 +14,7 @@ class SepformerEnh(BackendBase):
     Trabaja a 16 kHz mono.
     """
     NAME = "sepformer"
+    name = "sepformer" 
     TARGET_SR = 16000
 
     def __init__(self):

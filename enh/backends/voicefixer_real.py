@@ -11,6 +11,7 @@ class VoiceFixerReal(BackendBase):
     Usa la API por archivos: escribe wav temporal, llama restore, lee salida.
     """
     NAME = "voicefixer"
+    NAME = "voicefixer"
     TARGET_SR = 22050  # VoiceFixer trabaja a 22.05 kHz mono
 
     def __init__(self):
