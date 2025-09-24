@@ -38,8 +38,7 @@ class ClearerVoiceBackend(BackendBase):
             model_name, target_sr = PRESET2MODEL.get(self.preset, PRESET2MODEL["medium"])
             self._target_sr = target_sr
             self._cv = ClearVoice(task="speech_enhancement",
-                                  model_names=[model_name],
-                                  device=self.device)
+                                  model_names=[model_name])
         except Exception as e:
             raise RuntimeError(f"[clearervoice] No se pudo inicializar: {e}")
 
@@ -91,8 +90,7 @@ class ClearerVoiceBackend(BackendBase):
             # recarga modelo si cambia
             from clearvoice import ClearVoice
             self._cv = ClearVoice(task="speech_enhancement",
-                                  model_names=[model_name],
-                                  device=self.device)
+                                  model_names=[model_name])
         y, sr_out = self.process(x, sr)
         info = {"preset": preset or self.preset, "sr_out": sr_out, "backend": self.NAME}
         return y, info
