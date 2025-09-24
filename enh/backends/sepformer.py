@@ -23,7 +23,6 @@ class SepformerEnh(BackendBase):
         # descarga/carga del checkpoint
         self.enh = SpectralMaskEnhancement.from_hparams(source="speechbrain/metricgan-plus-voicebank", run_opts={"device": self.device})
 
-
     @staticmethod
     def _to_mono(x: np.ndarray) -> np.ndarray:
         return x.mean(axis=1).astype(np.float32) if x.ndim == 2 else x.astype(np.float32)
