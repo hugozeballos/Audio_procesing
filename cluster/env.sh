@@ -9,8 +9,11 @@ else
 fi
 
 # 2) Cargar .env
+# Cargar .env correctamente (respeta comillas y espacios)
 if [[ -f .env ]]; then
-  export $(grep -v '^\s*#' .env | xargs)
+  set -a
+  . ./.env
+  set +a
 fi
 
 # 3) Ajustes runtime
