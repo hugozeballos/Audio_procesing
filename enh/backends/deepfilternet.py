@@ -50,12 +50,8 @@ class DeepFilterNetCLI(BackendBase):
             sf.write(in_wav, xin_48k, self.TARGET_SR, subtype="PCM_16")
 
             # Llamada mínima. DeepFilterNet descarga el modelo al cache en el primer uso.
-            cmd = [
-                sys.executable, "-m", "df.enhance",
-                str(in_wav), str(out_dir),
-                "--device", os.getenv("ENH_DEVICE","cpu"),
-                "--model", "dfnet3",
-            ] + (["--model_dir", os.getenv("DF_MODEL_DIR")] if os.getenv("DF_MODEL_DIR") else [])
+            cmd = [sys.executable, "-m", "df.enhance", str(in_wav), str(out_dir), "--device", os.getenv("ENH_DEVICE","cpu"), "--model", "dfnet3"] + (["--model_dir", os.getenv("DF_MODEL_DIR")] if os.getenv("DF_MODEL_DIR") else [])
+
             # Nota: algunas versiones aceptan flags extra; mantenemos la invocación mínima por portabilidad.
             res = subprocess.run(cmd, check=False, capture_output=True, text=True)
             if res.returncode != 0:
