@@ -46,13 +46,20 @@ class DeepFilterNetCLI(BackendBase):
         with tempfile.TemporaryDirectory() as td:
             td = pathlib.Path(td)
             in_wav  = td / "in.wav"
-            out_wav = td / "out.wav"
+            out_wav = td 
             sf.write(in_wav, xin_48k, self.TARGET_SR, subtype="PCM_16")
 
             # Llamada mínima. DeepFilterNet descarga el modelo al cache en el primer uso.
-            cmd = [sys.executable, "-m", "df.enhance", str(in_wav), str(out_dir), "--device", os.getenv("ENH_DEVICE","cpu"), "--model", "dfnet3"] + (["--model_dir", os.getenv("DF_MODEL_DIR")] if os.getenv("DF_MODEL_DIR") else [])
+            cmd = [
+                sys.executable, "-m", "df.enhance",
+                str(in_wav), str(out_dir),
+                "--device", os.getenv("ENH_DEVICE","cpu"),
+                "--model", "dfnet3",
+            ] + (["--model_dir", os.getenv("DF_MODEL_DIR")] if os.getenv("DF_MODEL_DIR") else [])
             # Nota: algunas versiones aceptan flags extra; mantenemos la invocación mínima por portabilidad.
-            subprocess.run(cmd, check=True)  # no silencies stdout/stderr
+            res = subprocess.run(cmd, check=False, capture_output=True, text=True)
+            if res.returncode != 0:
+                raise RuntimeError(f"DeepFilterNet falló ({res.returncode}).\nSTDERR:\n{res.stderr}")
 
             out_file = [p for p in td.glob("*.wav") if p.name != "in.wav"][0]
             y48, sr_out = sf.read(out_file, dtype="float32", always_2d=False)
