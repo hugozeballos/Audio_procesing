@@ -54,7 +54,6 @@ class DeepFilterNetCLI(BackendBase):
             cmd = [
                 sys.executable, "-m", "df.enhance",
                 "--output-dir", str(out_dir),
-                "--no-suffix",              # salida = mismo nombre que entrada
                 str(in_wav),                # <-- archivo, no carpeta
             ] + (["--model-base-dir", os.getenv("DF_MODEL_DIR")] if os.getenv("DF_MODEL_DIR") else [])
             # Nota: algunas versiones aceptan flags extra; mantenemos la invocación mínima por portabilidad.
