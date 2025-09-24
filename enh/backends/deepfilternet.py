@@ -46,7 +46,7 @@ class DeepFilterNetCLI(BackendBase):
         with tempfile.TemporaryDirectory() as td:
             td = pathlib.Path(td)
             in_wav  = td / "in.wav"
-            out_wav = td 
+            out_dir = td 
             sf.write(in_wav, xin_48k, self.TARGET_SR, subtype="PCM_16")
 
             # Llamada mínima. DeepFilterNet descarga el modelo al cache en el primer uso.
