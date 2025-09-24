@@ -52,7 +52,7 @@ class DeepFilterNetCLI(BackendBase):
             # Llamada mínima. DeepFilterNet descarga el modelo al cache en el primer uso.
             cmd = [
                 sys.executable, "-m", "df.enhance",
-                str(in_wav), str(out_dir)
+                str(in_wav), str(out_dir),
             ] + (["--model_dir", os.getenv("DF_MODEL_DIR")] if os.getenv("DF_MODEL_DIR") else [])
             # Nota: algunas versiones aceptan flags extra; mantenemos la invocación mínima por portabilidad.
             res = subprocess.run(cmd, check=False, capture_output=True, text=True)
