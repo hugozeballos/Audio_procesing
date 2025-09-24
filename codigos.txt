@@ -34,3 +34,11 @@ INGEST=1 bash pipeline_all_in_one.sh      # con ingesta
 
 
 git pull --ff-only
+
+
+scp hugoz@kraken.ing.puc.cl:./metrics.csv .
+python .\graficar.py ".\metrics.csv" ".\"
+
+cd artifacts/
+cp metrics.csv ../
+cp metrics.csv /mnt-homes/kraken/hugoz/metrics.csv

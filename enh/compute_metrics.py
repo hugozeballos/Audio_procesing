@@ -46,6 +46,14 @@ def _clip_rate(x: np.ndarray, thr: float = 0.999) -> float:
         return 0.0
     return float((np.abs(x) >= thr).sum()) / float(x.size)
 
+def _peak_dbfs(x: np.ndarray) -> float:
+    if x.size == 0: return float("nan")
+    return 20 * np.log10(np.max(np.abs(x)) + 1e-12)
+
+def _rms_dbfs(x: np.ndarray) -> float:
+    if x.size == 0: return float("nan")
+    return 20 * np.log10(np.sqrt(np.mean(x**2) + 1e-12))
+
 def _lufs(x: np.ndarray, sr: int):
     if pyln is None or x.size == 0 or sr <= 0:
         return None
@@ -154,24 +162,43 @@ def main():
                     out_x, out_sr = _read_wav(out_path)
                 except Exception:
                     # no pudimos leer salida
-                    w.writerow([backend,preset,str(rel),str(ref_path),str(out_path),
-                                ref_sr or "", "", "", "", "", "", "", ""])
+                    w.writerow([
+                        "backend","preset","rel",
+                        "ref_path","out_path",
+                        "sr_ref","sr_out",
+                        "dur_ref_s","dur_out_s","dur_diff_s",
+                        "stoi","srmr",
+                        "lufs_ref","lufs","delta_lufs",
+                        "peak_dbfs_ref","peak_dbfs_out",
+                        "rms_dbfs_ref","rms_dbfs_out",
+                        "clip_rate_ref","clip_rate",
+                        "rtf",
+                    ])
                     continue
 
                 # métricas
-                dur_ref = _dur(ref_x, ref_sr) if ref_x is not None and ref_sr else None
                 dur_out = _dur(out_x, out_sr)
-                clip = _clip_rate(out_x)
-                lufs = _lufs(out_x, out_sr)
-                srmr_val = _srmr_score(out_x, out_sr)
+                clip_out = _clip_rate(out_x)
+                lufs_out = _lufs(out_x, out_sr)
+                srmr_out = _srmr_score(out_x, out_sr)
+                peak_out = _peak_dbfs(out_x)
+                rms_out  = _rms_dbfs(out_x)
 
+                # métricas de referencia
+                dur_ref = lufs_ref = srmr_ref = peak_ref = rms_ref = clip_ref = None
                 stoi_val = None
                 if ref_x is not None and ref_sr:
+                    dur_ref  = _dur(ref_x, ref_sr)
+                    lufs_ref = _lufs(ref_x, ref_sr)
+                    srmr_ref = _srmr_score(ref_x, ref_sr)
+                    peak_ref = _peak_dbfs(ref_x)
+                    rms_ref  = _rms_dbfs(ref_x)
+                    clip_ref = _clip_rate(ref_x)
                     stoi_val = _stoi_score(ref_x, out_x, ref_sr, out_sr)
 
-                # RTF: intenta leer de enh_log.csv si existe
-                rtf = ""
-                # (opcional) puedes integrar lectura de enh/enh_log.csv aquí y mapear por out_path
+                # deltas
+                dur_diff = (dur_out - dur_ref) if dur_ref is not None else None
+                delta_lufs = (lufs_out - lufs_ref) if (lufs_out is not None and lufs_ref is not None) else None
 
                 w.writerow([
                     backend, preset, str(rel),
@@ -179,11 +206,19 @@ def main():
                     ref_sr or "", out_sr,
                     f"{dur_ref:.3f}" if dur_ref is not None else "",
                     f"{dur_out:.3f}",
+                    f"{dur_diff:.3f}" if dur_diff is not None else "",
                     f"{stoi_val:.4f}" if stoi_val is not None else "",
-                    f"{srmr_val:.4f}" if srmr_val is not None else "",
-                    f"{lufs:.2f}" if isinstance(lufs,(int,float)) and not math.isnan(lufs) else "",
-                    f"{clip:.6f}",
-                    rtf
+                    f"{srmr_out:.4f}" if srmr_out is not None else "",
+                    f"{lufs_ref:.2f}" if lufs_ref is not None else "",
+                    f"{lufs_out:.2f}" if lufs_out is not None else "",
+                    f"{delta_lufs:+.2f}" if delta_lufs is not None else "",
+                    f"{peak_ref:.2f}" if peak_ref is not None else "",
+                    f"{peak_out:.2f}",
+                    f"{rms_ref:.2f}" if rms_ref is not None else "",
+                    f"{rms_out:.2f}",
+                    f"{clip_ref:.6f}" if clip_ref is not None else "",
+                    f"{clip_out:.6f}",
+                    "",  # rtf pendiente
                 ])
 
     print(f"OK -> {out_csv}")
