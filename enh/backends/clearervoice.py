@@ -9,6 +9,7 @@ class ClearerVoiceCLI(BackendBase):
         dev = os.getenv("ENH_DEVICE", "cpu")
         super().__init__(device=dev, preset=preset or "medium")
         self.NAME = "clearervoice"
+        self.preset = preset or "medium"
         self.cmd_tpl = os.getenv("ENH_CLEARERVOICE_CMD")
         if not self.cmd_tpl:
             raise RuntimeError("ENH_CLEARERVOICE_CMD no definido")
