@@ -1,5 +1,6 @@
 # enh/backends/deepfilternet.py
 import os, subprocess, tempfile, pathlib
+import sys
 import numpy as np, soundfile as sf
 from dataclasses import dataclass
 from scipy.signal import resample_poly

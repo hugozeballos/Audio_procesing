@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J enh_benchmark
 #SBATCH --partition=ialab-low        # Se tiene que elegir una partición de nodos con GPU
-#SBATCH -p gpu                 # cámbialo a 'cpu' si no usas GPU
 #SBATCH --gres=gpu:titan_rtx:1
 #SBATCH -t 04:00:00
 #SBATCH --mem=32G
