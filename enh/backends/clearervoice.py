@@ -7,7 +7,7 @@ class ClearerVoiceCLI(BackendBase):
     """Wrapper CLI de ClearerVoice. Configura ENH_CLEARERVOICE_CMD con {in},{out},{preset}."""
     def __init__(self, device=None, preset=None):
         dev = os.getenv("ENH_DEVICE", "cpu")
-        super().__init__(device=dev, preset=preset or "medium")
+        super().__init__(device=dev)
         self.NAME = "clearervoice"
         self.preset = preset or "medium"
         self.cmd_tpl = os.getenv("ENH_CLEARERVOICE_CMD")
