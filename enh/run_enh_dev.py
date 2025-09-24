@@ -14,7 +14,7 @@ from enh.backends.resemble_enh import ResembleEnh
 from enh.backends.voicefixer_real import VoiceFixerReal
 from enh.backends.sepformer import SepformerEnh
 from enh.backends.deepfilternet import DeepFilterNetCLI 
-from enh.backends.clearervoice import ClearerVoiceCLI
+from enh.backends.clearervoice import ClearerVoiceBackend as ClearerVoiceCLI
 
 
 BACKENDS = {
