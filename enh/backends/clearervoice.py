@@ -6,7 +6,9 @@ from utils.audio_prep import peak_normalize_minus1_dbfs as peak_norm
 class ClearerVoiceCLI(BackendBase):
     """Wrapper CLI de ClearerVoice. Configura ENH_CLEARERVOICE_CMD con {in},{out},{preset}."""
     def __init__(self, device=None, preset=None):
-        super().__init__(name="clearervoice", device="cpu", preset=preset or "medium")
+        dev = os.getenv("ENH_DEVICE", "cpu")
+        super().__init__(device=dev, preset=preset or "medium")
+        self.NAME = "clearervoice"
         self.cmd_tpl = os.getenv("ENH_CLEARERVOICE_CMD")
         if not self.cmd_tpl:
             raise RuntimeError("ENH_CLEARERVOICE_CMD no definido")
