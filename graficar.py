@@ -3,24 +3,27 @@ import matplotlib.pyplot as plt
 
 df = pd.read_csv("metrics.csv")
 
-# Boxplot de STOI por backend
+# convertir columnas numéricas (ignora celdas vacías)
+for col in ["stoi","lufs","dur_ref_s","dur_out_s"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# boxplot correcto de STOI por backend
 df.boxplot(column="stoi", by="backend")
 plt.title("STOI por backend")
 plt.suptitle("")
-plt.ylabel("STOI")
+plt.ylabel("STOI (0–1)")
 plt.show()
 
-# Diagrama de barras: LUFS promedio por backend
+# promedio de LUFS por backend
 df.groupby("backend")["lufs"].mean().plot(kind="bar")
 plt.title("LUFS promedio por backend")
 plt.ylabel("LUFS (dB)")
 plt.show()
 
-# Scatter: duración referencia vs salida, coloreado por backend
-for backend, g in df.groupby("backend"):
-    plt.scatter(g["dur_ref_s"], g["dur_out_s"], label=backend, alpha=0.7)
-plt.xlabel("Duración referencia (s)")
-plt.ylabel("Duración salida (s)")
+# duración referencia vs salida
+import seaborn as sns
+sns.scatterplot(data=df, x="dur_ref_s", y="dur_out_s", hue="backend")
 plt.title("Duración referencia vs salida")
-plt.legend()
+plt.xlabel("Referencia (s)")
+plt.ylabel("Salida (s)")
 plt.show()

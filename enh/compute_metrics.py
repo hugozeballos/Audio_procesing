@@ -134,8 +134,13 @@ def main():
             "backend","preset","rel",
             "ref_path","out_path",
             "sr_ref","sr_out",
-            "dur_ref_s","dur_out_s",
-            "stoi","srmr","lufs","clip_rate","rtf"
+            "dur_ref_s","dur_out_s","dur_diff_s",
+            "stoi","srmr",
+            "lufs_ref","lufs","delta_lufs",
+            "peak_dbfs_ref","peak_dbfs_out",
+            "rms_dbfs_ref","rms_dbfs_out",
+            "clip_rate_ref","clip_rate",
+            "rtf",
         ])
 
         for rel in rels:
@@ -161,21 +166,24 @@ def main():
                 try:
                     out_x, out_sr = _read_wav(out_path)
                 except Exception:
-                    # no pudimos leer salida
                     w.writerow([
-                        "backend","preset","rel",
-                        "ref_path","out_path",
-                        "sr_ref","sr_out",
-                        "dur_ref_s","dur_out_s","dur_diff_s",
-                        "stoi","srmr",
-                        "lufs_ref","lufs","delta_lufs",
-                        "peak_dbfs_ref","peak_dbfs_out",
-                        "rms_dbfs_ref","rms_dbfs_out",
-                        "clip_rate_ref","clip_rate",
-                        "rtf",
+                        backend, preset, str(rel),
+                        str(ref_path), str(out_path),
+                        ref_sr or "", "",          # sr_out vacío
+                        f"{_dur(ref_x, ref_sr):.3f}" if (ref_x is not None and ref_sr) else "",  # dur_ref_s
+                        "", "",                    # dur_out_s, dur_diff_s
+                        "", "",                    # stoi, srmr
+                        f"{_lufs(ref_x, ref_sr):.2f}" if (ref_x is not None and ref_sr) else "",  # lufs_ref
+                        "", "",                    # lufs, delta_lufs
+                        f"{_peak_dbfs(ref_x):.2f}" if (ref_x is not None and ref_sr) else "",
+                        "",                        # peak_dbfs_out
+                        f"{_rms_dbfs(ref_x):.2f}" if (ref_x is not None and ref_sr) else "",
+                        "",                        # rms_dbfs_out
+                        f"{_clip_rate(ref_x):.6f}" if (ref_x is not None and ref_sr) else "",
+                        "",                        # clip_rate
+                        "",                        # rtf
                     ])
                     continue
-
                 # métricas
                 dur_out = _dur(out_x, out_sr)
                 clip_out = _clip_rate(out_x)
