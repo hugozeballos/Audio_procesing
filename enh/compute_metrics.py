@@ -143,6 +143,94 @@ def snr_db(ref, est, sr, align=True):
     p_err = np.sum(err**2) + EPS
     return 10.0 * np.log10(p_sig / p_err)
 
+def snr_segmental_db(ref, est, sr, segment_length=0.02, align=True):
+    """
+    SNR segmental - más robusto que SNR normal para evaluación de voz
+    """
+    if align:
+        ref, est = _align_by_xcorr(ref, est, sr)
+    
+    n = min(len(ref), len(est))
+    if n < sr * segment_length * 2:  # mínimo 2 segmentos
+        return None
+    
+    ref = ref[:n]
+    est = est[:n]
+    
+    segment_samples = int(sr * segment_length)  # 20ms típico
+    num_segments = n // segment_samples
+    
+    snr_segments = []
+    for i in range(num_segments):
+        start = i * segment_samples
+        end = start + segment_samples
+        
+        ref_seg = ref[start:end]
+        est_seg = est[start:end]
+        err_seg = est_seg - ref_seg
+        
+        # Solo calcular SNR en segmentos con suficiente energía
+        ref_energy = np.sum(ref_seg**2)
+        if ref_energy > EPS and len(ref_seg) > 10:
+            p_sig = ref_energy
+            p_err = np.sum(err_seg**2) + EPS
+            snr_seg = 10.0 * np.log10(p_sig / p_err)
+            # Limitar valores extremos (típico en SNRseg)
+            snr_seg = max(min(snr_seg, 35), -10)
+            snr_segments.append(snr_seg)
+    
+    if not snr_segments:
+        return None
+    
+    return float(np.mean(snr_segments))
+
+def spectral_distortion_db(ref, est, sr, align=True):
+    """
+    Distorsión espectral simple - evalúa preservación de características espectrales
+    """
+    if align:
+        ref, est = _align_by_xcorr(ref, est, sr)
+    
+    n = min(len(ref), len(est))
+    if n < 1024:  # Necesitamos suficiente longitud para análisis espectral
+        return None
+    
+    ref = ref[:n]
+    est = est[:n]
+    
+    # Calcular espectros de potencia suavizados
+    n_fft = 1024
+    hop_length = n_fft // 4
+    
+    # Espectrograma de referencia
+    ref_mag = []
+    for i in range(0, n - n_fft, hop_length):
+        frame = ref[i:i + n_fft] * np.hanning(n_fft)
+        spec = np.abs(np.fft.rfft(frame))
+        ref_mag.append(spec)
+    
+    # Espectrograma de estimación
+    est_mag = []
+    for i in range(0, n - n_fft, hop_length):
+        frame = est[i:i + n_fft] * np.hanning(n_fft)
+        spec = np.abs(np.fft.rfft(frame))
+        est_mag.append(spec)
+    
+    if not ref_mag or not est_mag:
+        return None
+    
+    ref_mag = np.array(ref_mag)
+    est_mag = np.array(est_mag)
+    
+    # Asegurar misma longitud
+    min_frames = min(len(ref_mag), len(est_mag))
+    ref_mag = ref_mag[:min_frames]
+    est_mag = est_mag[:min_frames]
+    
+    # Distorsión espectral en dB (log spectral distance)
+    spectral_dist = np.mean(20 * np.log10((np.abs(ref_mag - est_mag) + EPS) / (ref_mag + EPS)))
+    return float(spectral_dist)
+
 def si_sdr_db(ref, est, sr, align=True):
     """
     SI-SDR según Le Roux et al. (scale-invariant).
@@ -213,6 +301,7 @@ def main():
             "rms_dbfs_ref","rms_dbfs_out",
             "clip_rate_ref","clip_rate",
             "snr_db","si_sdr_db",
+            "snr_seg_db", "spectral_dist_db",
             "rtf",
         ])
 
@@ -255,6 +344,7 @@ def main():
                         f"{_clip_rate(ref_x):.6f}" if (ref_x is not None and ref_sr) else "",
                         "",                        # clip_rate
                         "", "", "",                # stoi, srmr_ref, srmr
+                        "", "", "",                # snr_seg, spectral_dist
                         "",                        # rtf
                     ])
                     continue
@@ -266,8 +356,8 @@ def main():
                 peak_out = _peak_dbfs(out_x)
                 rms_out  = _rms_dbfs(out_x)
                 
-                snr_val = None
-                sisdr_val = None
+                snr_val = sisdr_val = snr_seg_val = spectral_dist_val = None
+                
 
                 # métricas de referencia
                 dur_ref = lufs_ref = srmr_ref = peak_ref = rms_ref = clip_ref = None
@@ -281,11 +371,13 @@ def main():
                     clip_ref = _clip_rate(ref_x)
                     stoi_val = _stoi_score(ref_x, out_x, ref_sr, out_sr)
 
-                    snr_val = sisdr_val = None
-                    if ref_x is not None and ref_sr and out_sr:
-                        ref_cmp = ref_x if ref_sr == out_sr else _resample_to(ref_sr, ref_x, out_sr)
-                        snr_val   = snr_db(ref_cmp, out_x, out_sr, align=True)
-                        sisdr_val = si_sdr_db(ref_cmp, out_x, out_sr, align=True)
+                    ref_cmp = ref_x if ref_sr == out_sr else _resample_to(ref_sr, ref_x, out_sr)
+                    snr_val   = snr_db(ref_cmp, out_x, out_sr, align=True)
+                    sisdr_val = si_sdr_db(ref_cmp, out_x, out_sr, align=True)
+                    snr_seg_val = snr_segmental_db(ref_cmp, out_x, out_sr, align=True)  # ← NUEVO CÁLCULO
+                    spectral_dist_val = spectral_distortion_db(ref_cmp, out_x, out_sr, align=True)  # ← NUEVO CÁLCULO
+
+                    
 
                 # deltas
                 dur_diff = (dur_out - dur_ref) if dur_ref is not None else None
@@ -312,6 +404,8 @@ def main():
                     f"{clip_out:.6f}",
                     f"{snr_val:.2f}"   if snr_val   is not None else "",
                     f"{sisdr_val:.2f}" if sisdr_val is not None else "",
+                    f"{snr_seg_val:.2f}" if snr_seg_val is not None else "",  # ← NUEVA MÉTRICA
+                    f"{spectral_dist_val:.2f}" if spectral_dist_val is not None else "",  # ← NUEVA MÉTRICA
                     "",  # rtf pendiente
                 ])
 
