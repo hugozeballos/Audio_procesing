@@ -207,11 +207,12 @@ def main():
             "ref_path","out_path",
             "sr_ref","sr_out",
             "dur_ref_s","dur_out_s","dur_diff_s",
-            "stoi","srmr",
+            "stoi","srmr_ref","srmr",
             "lufs_ref","lufs","delta_lufs",
             "peak_dbfs_ref","peak_dbfs_out",
             "rms_dbfs_ref","rms_dbfs_out",
             "clip_rate_ref","clip_rate",
+            "snr_db","si_sdr_db",
             "rtf",
         ])
 
@@ -253,6 +254,7 @@ def main():
                         "",                        # rms_dbfs_out
                         f"{_clip_rate(ref_x):.6f}" if (ref_x is not None and ref_sr) else "",
                         "",                        # clip_rate
+                        "", "", "",                # stoi, srmr_ref, srmr
                         "",                        # rtf
                     ])
                     continue
@@ -263,6 +265,9 @@ def main():
                 srmr_out = _srmr_score(out_x, out_sr)
                 peak_out = _peak_dbfs(out_x)
                 rms_out  = _rms_dbfs(out_x)
+                
+                snr_val = None
+                sisdr_val = None
 
                 # métricas de referencia
                 dur_ref = lufs_ref = srmr_ref = peak_ref = rms_ref = clip_ref = None
@@ -276,6 +281,12 @@ def main():
                     clip_ref = _clip_rate(ref_x)
                     stoi_val = _stoi_score(ref_x, out_x, ref_sr, out_sr)
 
+                    snr_val = sisdr_val = None
+                    if ref_x is not None and ref_sr and out_sr:
+                        ref_cmp = ref_x if ref_sr == out_sr else _resample_to(ref_sr, ref_x, out_sr)
+                        snr_val   = snr_db(ref_cmp, out_x, out_sr, align=True)
+                        sisdr_val = si_sdr_db(ref_cmp, out_x, out_sr, align=True)
+
                 # deltas
                 dur_diff = (dur_out - dur_ref) if dur_ref is not None else None
                 delta_lufs = (lufs_out - lufs_ref) if (lufs_out is not None and lufs_ref is not None) else None
@@ -288,6 +299,7 @@ def main():
                     f"{dur_out:.3f}",
                     f"{dur_diff:.3f}" if dur_diff is not None else "",
                     f"{stoi_val:.4f}" if stoi_val is not None else "",
+                    f"{srmr_ref:.4f}" if srmr_ref is not None else "",
                     f"{srmr_out:.4f}" if srmr_out is not None else "",
                     f"{lufs_ref:.2f}" if lufs_ref is not None else "",
                     f"{lufs_out:.2f}" if lufs_out is not None else "",
@@ -298,6 +310,8 @@ def main():
                     f"{rms_out:.2f}",
                     f"{clip_ref:.6f}" if clip_ref is not None else "",
                     f"{clip_out:.6f}",
+                    f"{snr_val:.2f}"   if snr_val   is not None else "",
+                    f"{sisdr_val:.2f}" if sisdr_val is not None else "",
                     "",  # rtf pendiente
                 ])
 
