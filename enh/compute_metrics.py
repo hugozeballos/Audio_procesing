@@ -5,6 +5,8 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
+
+
 # --- imports opcionales (cada uno se usa si está disponible) ---
 try:
     from pystoi.stoi import stoi as _stoi
@@ -45,6 +47,38 @@ def _clip_rate(x: np.ndarray, thr: float = 0.999) -> float:
     if x.size == 0:
         return 0.0
     return float((np.abs(x) >= thr).sum()) / float(x.size)
+
+EPS = 1e-12
+
+def _zero_mean(x):
+    return x - np.mean(x)
+
+def _align_by_xcorr(ref, est, sr, max_shift_s=0.5):
+    # recorta a la misma longitud primero
+    n = min(len(ref), len(est))
+    ref, est = ref[:n], est[:n]
+    max_lag = int(max_shift_s * sr)
+    if max_lag == 0:
+        return ref, est
+    # correlación con ventana de desplazamientos
+    lags = np.arange(-max_lag, max_lag + 1)
+    best_lag = 0
+    best_val = -np.inf
+    for lag in lags:
+        if lag >= 0:
+            v = np.dot(ref[lag:], est[:n-lag])
+        else:
+            v = np.dot(ref[:n+lag], est[-lag:])
+        if v > best_val:
+            best_val = v
+            best_lag = lag
+    # aplica desplazamiento
+    if best_lag >= 0:
+        return ref[best_lag:], est[:n-best_lag]
+    else:
+        lag = -best_lag
+        return ref[:n-lag], est[lag:]
+
 
 def _peak_dbfs(x: np.ndarray) -> float:
     if x.size == 0: return float("nan")
@@ -90,6 +124,44 @@ def _srmr_score(x: np.ndarray, sr: int) -> float | None:
         return float(val)
     except Exception:
         return None
+    
+def snr_db(ref, est, sr, align=True):
+    """
+    SNR = 10*log10( ||ref||^2 / ||est-ref||^2 ), con opcional alineación.
+    ref: señal referencia limpia o 'antes'
+    est: señal estimada o 'después'
+    """
+    if align:
+        ref, est = _align_by_xcorr(ref, est, sr)
+    n = min(len(ref), len(est))
+    if n < 160:  # <10 ms @16k
+        return None
+    ref = ref[:n]
+    est = est[:n]
+    err = est - ref
+    p_sig = np.sum(ref**2) + EPS
+    p_err = np.sum(err**2) + EPS
+    return 10.0 * np.log10(p_sig / p_err)
+
+def si_sdr_db(ref, est, sr, align=True):
+    """
+    SI-SDR según Le Roux et al. (scale-invariant).
+    """
+    if align:
+        ref, est = _align_by_xcorr(ref, est, sr)
+    n = min(len(ref), len(est))
+    if n < 160:
+        return None
+    s = _zero_mean(ref[:n])
+    sh = _zero_mean(est[:n])
+    denom = np.sum(s**2) + EPS
+    alpha = np.sum(sh * s) / denom
+    s_target = alpha * s
+    e_noise = sh - s_target
+    num = np.sum(s_target**2) + EPS
+    den = np.sum(e_noise**2) + EPS
+    return 10.0 * np.log10(num / den)
+
 
 def _read_wav(path: Path) -> tuple[np.ndarray, int]:
     x, sr = sf.read(path, dtype="float32", always_2d=False)
