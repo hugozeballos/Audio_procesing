@@ -20,6 +20,7 @@ numeric_cols = [
     "peak_dbfs_ref","peak_dbfs_out","rms_dbfs_ref","rms_dbfs_out",
     "clip_rate_ref","clip_rate",
     "snr_db","si_sdr_db",
+    "snr_db","si_sdr_db","snr_seg_db","spectral_dist_db",
     "dur_ref_s","dur_out_s","dur_diff_s"
 ]
 for col in numeric_cols:
@@ -33,167 +34,155 @@ for c in ["dur_ref_s","dur_out_s"]:
 
 # 4) NUEVA VISUALIZACIÓN: Dashboard Interconectado para Diarización
 def create_diarization_dashboard():
-    """Dashboard especializado para análisis de diarización"""
+    """Dashboard simplificado y funcional - sin sobreposiciones"""
     
     # Configuración general
     plt.style.use('default')
     sns.set_palette("husl")
     
-    # Crear figura con GridSpec para layout más flexible
-    fig = plt.figure(figsize=(20, 16))
-    gs = GridSpec(3, 4, figure=fig, hspace=0.4, wspace=0.3)
+    print("📈 Generando gráficos individuales (evitando sobreposiciones)...")
     
-    fig.suptitle('Dashboard de Análisis para Diarización de Audio', 
-                fontsize=18, fontweight='bold', y=0.98)
+    # 1) SCATTER PLOT - Relación principal
+    plt.figure(figsize=(10, 6))
     
-    # A) RADAR CHART - Evaluación multidimensional (arriba a la izquierda)
-    ax_radar = fig.add_subplot(gs[0, 0], polar=True)
+    # Elegir las mejores métricas disponibles
+    if 'snr_seg_db' in df.columns and 'stoi' in df.columns:
+        x_metric, y_metric = 'snr_seg_db', 'stoi'
+        x_label, y_label = 'SNR Segmental (dB)', 'STOI'
+    elif 'si_sdr_db' in df.columns and 'stoi' in df.columns:
+        x_metric, y_metric = 'si_sdr_db', 'stoi'
+        x_label, y_label = 'SI-SDR (dB)', 'STOI'
+    else:
+        x_metric, y_metric = 'snr_db', 'stoi'
+        x_label, y_label = 'SNR (dB)', 'STOI'
     
-    # Métricas normalizadas para radar chart
-    radar_metrics = ['stoi', 'si_sdr_db', 'snr_db', 'srmr']
-    available_radar = [m for m in radar_metrics if m in df.columns]
-    
-    if available_radar:
-        # Normalizar métricas (0-1)
-        normalized_data = {}
-        for backend in df['backend'].unique():
-            backend_data = []
-            for metric in available_radar:
-                values = df[df['backend'] == backend][metric].dropna()
-                if len(values) > 0:
-                    if metric == 'stoi':  # STOI ya está en 0-1
-                        norm_val = values.median()
-                    else:  # Normalizar otras métricas
-                        min_val = df[metric].min()
-                        max_val = df[metric].max()
-                        if max_val > min_val:
-                            norm_val = (values.median() - min_val) / (max_val - min_val)
-                        else:
-                            norm_val = 0.5
-                else:
-                    norm_val = 0
-                backend_data.append(norm_val)
-            normalized_data[backend] = backend_data
-        
-        # Crear radar chart
-        angles = np.linspace(0, 2*np.pi, len(available_radar), endpoint=False).tolist()
-        angles += angles[:1]  # Cerrar el círculo
-        
-        colors = plt.cm.Set3(np.linspace(0, 1, len(normalized_data)))
-        
-        for i, (backend, values) in enumerate(normalized_data.items()):
-            values += values[:1]  # Cerrar el polígono
-            ax_radar.plot(angles, values, 'o-', linewidth=2, label=backend, color=colors[i])
-            ax_radar.fill(angles, values, alpha=0.1, color=colors[i])
-        
-        ax_radar.set_xticks(angles[:-1])
-        ax_radar.set_xticklabels(available_radar)
-        ax_radar.set_ylim(0, 1)
-        ax_radar.set_title('Perfil Multidimensional\n(Área mayor = mejor)', fontweight='bold')
-        ax_radar.legend(bbox_to_anchor=(1.1, 0.5), loc='center left')
-    
-    # B) SCATTER MATRIX - Correlaciones clave (arriba derecha)
-    scatter_metrics = ['stoi', 'si_sdr_db', 'snr_db']
-    available_scatter = [m for m in scatter_metrics if m in df.columns]
-    
-    if len(available_scatter) >= 2:
-        ax_scatter = fig.add_subplot(gs[0, 1:3])
-        
-        # Scatter con colores por backend
+    if x_metric in df.columns and y_metric in df.columns:
         for backend in df['backend'].unique():
             subset = df[df['backend'] == backend]
             if len(subset) > 0:
-                ax_scatter.scatter(subset[available_scatter[0]], 
-                                 subset[available_scatter[1]], 
-                                 label=backend, alpha=0.7, s=80)
+                plt.scatter(subset[x_metric], subset[y_metric], 
+                           label=backend, alpha=0.7, s=60)
         
-        ax_scatter.set_xlabel(available_scatter[0])
-        ax_scatter.set_ylabel(available_scatter[1])
-        ax_scatter.set_title(f'Relación {available_scatter[0]} vs {available_scatter[1]}', 
-                           fontweight='bold')
-        ax_scatter.legend()
-        ax_scatter.grid(True, alpha=0.3)
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
+        plt.title(f'Relación {x_label} vs {y_label} - Diarización', fontweight='bold')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
     
-    # C) HEATMAP de ranking por archivo (centro izquierda)
-    ax_heatmap = fig.add_subplot(gs[1, 0])
+    # 2) GRÁFICO DE BARRAS - Comparación de métricas principales
+    plt.figure(figsize=(12, 6))
     
+    # Métricas a comparar
+    comparison_metrics = []
+    if 'stoi' in df.columns: comparison_metrics.append('stoi')
+    if 'si_sdr_db' in df.columns: comparison_metrics.append('si_sdr_db') 
+    if 'snr_seg_db' in df.columns: comparison_metrics.append('snr_seg_db')
+    if 'snr_db' in df.columns: comparison_metrics.append('snr_db')
+    
+    if comparison_metrics:
+        # Calcular promedios por backend
+        backend_means = df.groupby('backend')[comparison_metrics].mean()
+        
+        # Normalizar para comparación justa
+        backend_normalized = backend_means.copy()
+        for metric in comparison_metrics:
+            if metric == 'stoi':
+                backend_normalized[metric] = backend_means[metric]  # Ya está en 0-1
+            else:
+                # Normalizar métricas en dB a escala 0-1
+                min_val = backend_means[metric].min()
+                max_val = backend_means[metric].max()
+                if max_val > min_val:
+                    backend_normalized[metric] = (backend_means[metric] - min_val) / (max_val - min_val)
+        
+        x_pos = np.arange(len(backend_normalized))
+        width = 0.8 / len(comparison_metrics)
+        
+        # Crear barras para cada métrica
+        for i, metric in enumerate(comparison_metrics):
+            offset = (i - len(comparison_metrics)/2) * width + width/2
+            plt.bar(x_pos + offset, backend_normalized[metric], width, 
+                   label=metric, alpha=0.8)
+        
+        plt.xlabel('Backend')
+        plt.ylabel('Puntaje Normalizado (0-1)')
+        plt.title('Comparación de Métricas por Backend (Normalizado)', fontweight='bold')
+        plt.xticks(x_pos, backend_normalized.index, rotation=45)
+        plt.legend()
+        plt.grid(True, alpha=0.3, axis='y')
+        plt.tight_layout()
+        plt.show()
+    
+    # 3) HEATMAP de STOI por archivo (solo si hay pocos archivos)
     if 'stoi' in df.columns and 'rel' in df.columns:
-        # Crear matriz: archivos x backends
-        heatmap_data = df.pivot_table(index='rel', columns='backend', values='stoi', aggfunc='mean')
-        
-        if not heatmap_data.empty:
-            sns.heatmap(heatmap_data, annot=True, fmt='.3f', cmap='RdYlGn', 
-                       center=0.5, ax=ax_heatmap, cbar_kws={'label': 'STOI'})
-            ax_heatmap.set_title('STOI por Archivo y Backend\n(Verde = mejor)', fontweight='bold')
-            ax_heatmap.tick_params(axis='x', rotation=45)
-            ax_heatmap.tick_params(axis='y', rotation=0)
+        archivos_unicos = df['rel'].nunique()
+        if archivos_unicos <= 10:  # Solo mostrar heatmap si hay pocos archivos
+            plt.figure(figsize=(12, 6))
+            
+            heatmap_data = df.pivot_table(index='rel', columns='backend', values='stoi', aggfunc='mean')
+            
+            if not heatmap_data.empty:
+                sns.heatmap(heatmap_data, annot=True, fmt='.3f', cmap='RdYlGn', 
+                           center=0.5, cbar_kws={'label': 'STOI'})
+                plt.title('STOI por Archivo y Backend\n(Verde = mejor)', fontweight='bold')
+                plt.tight_layout()
+                plt.show()
+        else:
+            print(f"⚠️  Omitting heatmap (too many files: {archivos_unicos})")
     
-    # D) BARRAS APILADAS - Distribución de calidad (centro derecha)
-    ax_stacked = fig.add_subplot(gs[1, 1:3])
-    
+    # 4) VIOLIN PLOT - Distribución de STOI
     if 'stoi' in df.columns:
-        # Categorizar calidad
-        def categorize_quality(stoi):
-            if stoi > 0.8: return 'Excelente'
-            elif stoi > 0.6: return 'Buena' 
-            elif stoi > 0.4: return 'Regular'
-            else: return 'Mala'
+        plt.figure(figsize=(10, 6))
         
-        df['calidad'] = df['stoi'].apply(categorize_quality)
-        quality_counts = df.groupby(['backend', 'calidad']).size().unstack(fill_value=0)
+        sns.violinplot(data=df, x='backend', y='stoi', inner='box')
+        sns.swarmplot(data=df, x='backend', y='stoi', color='black', alpha=0.6, size=3)
+        plt.title('Distribución de STOI por Backend', fontweight='bold')
+        plt.ylabel('STOI')
+        plt.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='Excelente (>0.8)')
+        plt.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='Aceptable (>0.6)')
+        plt.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.show()
+    
+    # 5) GRÁFICO DE LÍNEAS - Tendencia por archivo (solo si hay pocos)
+    if 'stoi' in df.columns and 'rel' in df.columns and df['rel'].nunique() <= 8:
+        plt.figure(figsize=(12, 6))
         
-        if not quality_counts.empty:
-            quality_counts.plot(kind='bar', stacked=True, ax=ax_stacked, 
-                              color=['#e74c3c', '#f39c12', '#f1c40f', '#2ecc71'])
-            ax_stacked.set_title('Distribución de Calidad por Backend', fontweight='bold')
-            ax_stacked.set_ylabel('Número de Archivos')
-            ax_stacked.legend(title='Calidad STOI')
-            ax_stacked.tick_params(axis='x', rotation=45)
-    
-    # E) LÍNEAS TEMPORALES - Consistencia entre archivos (abajo izquierda)
-    ax_lines = fig.add_subplot(gs[2, 0])
-    
-    if 'stoi' in df.columns and 'rel' in df.columns:
-        # Ordenar archivos para mejor visualización
-        archivos_ordenados = df['rel'].unique()
+        # Ordenar archivos de manera consistente
+        archivos_ordenados = sorted(df['rel'].unique())
         
         for backend in df['backend'].unique():
-            subset = df[df['backend'] == backend]
-            if len(subset) > 0:
-                valores = [subset[subset['rel'] == arch]['stoi'].mean() 
-                          for arch in archivos_ordenados]
-                ax_lines.plot(range(len(archivos_ordenados)), valores, 
-                            'o-', label=backend, alpha=0.7, markersize=4)
+            valores = []
+            for archivo in archivos_ordenados:
+                valor = df[(df['backend'] == backend) & (df['rel'] == archivo)]['stoi'].mean()
+                valores.append(valor if not np.isnan(valor) else None)
+            
+            # Filtrar valores None
+            indices_validos = [i for i, v in enumerate(valores) if v is not None]
+            valores_validos = [v for v in valores if v is not None]
+            
+            if valores_validos:
+                plt.plot(indices_validos, valores_validos, 'o-', label=backend, markersize=6)
         
-        ax_lines.set_xlabel('Archivos (ordenados)')
-        ax_lines.set_ylabel('STOI')
-        ax_lines.set_title('Consistencia entre Archivos', fontweight='bold')
-        ax_lines.legend(bbox_to_anchor=(1.05, 0.5), loc='center left')
-        ax_lines.grid(True, alpha=0.3)
-    
-    # F) VIOLIN PLOT - Distribución detallada (abajo derecha)
-    ax_violin = fig.add_subplot(gs[2, 1:3])
-    
-    if 'stoi' in df.columns:
-        # Violin plot + swarm plot para ver puntos individuales
-        sns.violinplot(data=df, x='backend', y='stoi', ax=ax_violin, inner='box')
-        sns.swarmplot(data=df, x='backend', y='stoi', ax=ax_violin, 
-                     color='black', alpha=0.6, size=3)
-        ax_violin.set_title('Distribución Detallada de STOI', fontweight='bold')
-        ax_violin.set_ylabel('STOI')
-        ax_violin.tick_params(axis='x', rotation=45)
-        ax_violin.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='Umbral excelente')
-        ax_violin.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='Umbral aceptable')
-        ax_violin.legend()
-    
-    plt.tight_layout()
-    plt.show()
+        plt.xlabel('Archivos (ordenados)')
+        plt.ylabel('STOI')
+        plt.title('Consistencia de STOI entre Archivos', fontweight='bold')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.xticks(range(len(archivos_ordenados)), [f"Archivo {i+1}" for i in range(len(archivos_ordenados))])
+        plt.tight_layout()
+        plt.show()
+
+    print("✅ Dashboard generado exitosamente")
 
 # 5) ANÁLISIS DE CORRELACIONES para diarización
 def analyze_correlations():
     """Analizar cómo se correlacionan las métricas para diarización"""
     
-    metrics_for_corr = ['stoi', 'si_sdr_db', 'snr_db', 'srmr', 'lufs', 'clip_rate']
+    metrics_for_corr = ['stoi', 'si_sdr_db', 'snr_seg_db', 'snr_db', 'spectral_dist_db', 'srmr', 'lufs', 'clip_rate']
     available_corr = [m for m in metrics_for_corr if m in df.columns]
     
     if len(available_corr) >= 2:
@@ -215,16 +204,28 @@ def analyze_correlations():
                 if metric != 'stoi':
                     print(f"   {metric:12}: {corr:6.3f}")
 
+    
+
 # 6) RANKING FINAL para diarización
 def final_ranking():
-    """Ranking ponderado específico para diarización"""
+    """Ranking ponderado específico para diarización con nuevas métricas"""
     
+    # Diferentes estrategias de ranking según métricas disponibles
     if 'stoi' in df.columns and 'si_sdr_db' in df.columns:
-        # Puntaje combinado: 70% STOI + 30% SI-SDR (énfasis en inteligibilidad)
-        df['puntaje_diarizacion'] = (
-            0.7 * df['stoi'] + 
-            0.3 * (df['si_sdr_db'].clip(lower=-20, upper=40) + 20) / 60
-        )
+        # Estrategia 1: Énfasis en inteligibilidad (STOI + SI-SDR)
+        if 'snr_seg_db' in df.columns:
+            # Usar las 3 métricas más importantes
+            df['puntaje_diarizacion'] = (
+                0.5 * df['stoi'] + 
+                0.3 * (df['si_sdr_db'].clip(lower=-20, upper=40) + 20) / 60 +
+                0.2 * (df['snr_seg_db'].clip(lower=-10, upper=30) + 10) / 40
+            )
+        else:
+            # Estrategia conservadora (solo STOI + SI-SDR)
+            df['puntaje_diarizacion'] = (
+                0.7 * df['stoi'] + 
+                0.3 * (df['si_sdr_db'].clip(lower=-20, upper=40) + 20) / 60
+            )
         
         ranking = df.groupby('backend')['puntaje_diarizacion'].agg(['mean', 'std', 'count']).round(4)
         ranking = ranking.sort_values('mean', ascending=False)
@@ -234,24 +235,50 @@ def final_ranking():
         print(ranking)
         
         # Gráfico de ranking
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 6))
+        
+        # Subgráfico 1: Ranking principal
+        plt.subplot(1, 2, 1)
         bars = plt.bar(ranking.index, ranking['mean'], 
                       yerr=ranking['std'], capsize=5, alpha=0.7,
                       color=['#2ecc71' if x > 0.7 else '#f39c12' if x > 0.5 else '#e74c3c' 
                             for x in ranking['mean']])
         
-        plt.title('Puntaje Final para Diarización\n(70% STOI + 30% SI-SDR)', fontweight='bold')
+        plt.title('Puntaje Combinado Diarización', fontweight='bold')
         plt.ylabel('Puntaje (0-1)')
         plt.ylim(0, 1)
         plt.grid(True, alpha=0.3, axis='y')
+        plt.xticks(rotation=45)
         
         for bar, mean, std in zip(bars, ranking['mean'], ranking['std']):
             plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02, 
-                    f'{mean:.3f} ± {std:.3f}', ha='center', va='bottom', fontweight='bold')
+                    f'{mean:.3f}', ha='center', va='bottom', fontweight='bold')
+        
+        # Subgráfico 2: Comparación de métricas individuales
+        if 'snr_seg_db' in df.columns:
+            plt.subplot(1, 2, 2)
+            metric_means = df.groupby('backend')[['stoi', 'si_sdr_db', 'snr_seg_db']].mean()
+            # Normalizar para comparación
+            metric_means_norm = metric_means.copy()
+            metric_means_norm['stoi'] = metric_means['stoi']  # Ya está en 0-1
+            metric_means_norm['si_sdr_db'] = (metric_means['si_sdr_db'] + 20) / 60  # Normalizar a 0-1
+            metric_means_norm['snr_seg_db'] = (metric_means['snr_seg_db'] + 10) / 40  # Normalizar a 0-1
+            
+            x_pos = np.arange(len(metric_means_norm))
+            width = 0.25
+            
+            plt.bar(x_pos - width, metric_means_norm['stoi'], width, label='STOI', alpha=0.7)
+            plt.bar(x_pos, metric_means_norm['si_sdr_db'], width, label='SI-SDR', alpha=0.7)
+            plt.bar(x_pos + width, metric_means_norm['snr_seg_db'], width, label='SNR Seg', alpha=0.7)
+            
+            plt.title('Comparación de Métricas Individuales', fontweight='bold')
+            plt.ylabel('Puntaje Normalizado (0-1)')
+            plt.xticks(x_pos, metric_means_norm.index, rotation=45)
+            plt.legend()
+            plt.grid(True, alpha=0.3, axis='y')
         
         plt.tight_layout()
         plt.show()
-
 # Ejecutar análisis completo
 print("📊 INICIANDO ANÁLISIS AVANZADO PARA DIARIZACIÓN...")
 print("="*60)
@@ -261,7 +288,7 @@ analyze_correlations()
 final_ranking()
 
 # Mantener tu resumen tabular original
-summary_cols = [c for c in ["stoi","srmr","snr_db","si_sdr_db","lufs","delta_lufs","clip_rate"] if c in df.columns]
+summary_cols = [c for c in ["stoi","srmr","snr_db","si_sdr_db","snr_seg_db","spectral_dist_db","lufs","delta_lufs","clip_rate"] if c in df.columns]
 if summary_cols:
     summary = df.groupby("backend", dropna=True)[summary_cols].agg(["count","median","mean"])
     print("\n📋 RESUMEN TABULAR ORIGINAL:")

@@ -17,8 +17,8 @@
 set -euo pipefail
 
 # 0) Entrar a raíz del repo
-cd "$(dirname "$0")"
-mkdir -p logs artifacts
+# Trabajar donde se envió el job (o donde estás si no es Slurm)
+cd "${SLURM_SUBMIT_DIR:-$PWD}" || { echo "cd fallo"; exit 1; }
 
 # 1) Entorno
 source cluster/env.sh
