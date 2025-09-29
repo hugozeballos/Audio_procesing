@@ -24,7 +24,7 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}" || { echo "cd fallo"; exit 1; }
 source cluster/env.sh
 
 # Parámetro opcional
-INGEST="${INGEST:-0}"
+INGEST="${INGEST:-1}"
 
 # --- leer config sin jq ---
 CFG="config/experiment_config.json"
