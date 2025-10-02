@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J enh_benchmark
-#SBATCH --partition=ialab-high    # Se tiene que elegir una partición de nodos con GPU
+#SBATCH --partition=ialab-high
 #SBATCH --gres=gpu:1080_ti:2
 #SBATCH -t 04:00:00
 #SBATCH --mem=16G
@@ -9,26 +9,24 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 
-
 # Uso:
-#   bash pipeline_all_in_one.sh               # benchmark sin ingesta
-#   INGEST=1 bash pipeline_all_in_one.sh      # con ingesta Drive→HF
+#   bash pipeline_all_in_one.sh
+#   INGEST=1 bash pipeline_all_in_one.sh
 
 set -euo pipefail
+mkdir -p logs
 
-# 0) Entrar a raíz del repo
-# Trabajar donde se envió el job (o donde estás si no es Slurm)
+# 0) Raíz del repo
 cd "${SLURM_SUBMIT_DIR:-$PWD}" || { echo "cd fallo"; exit 1; }
 
-# 1) Entorno
+# 1) Entorno de cluster (vars como GOOGLE_APPLICATION_CREDENTIALS, HF_TOKEN, etc.)
 source cluster/env.sh
 
 # Parámetro opcional
 INGEST="${INGEST:-1}"
 
-# --- leer config sin jq ---
+# --- util: leer JSON sin jq ---
 CFG="config/experiment_config.json"
-
 json_get () {
 python - "$CFG" "$1" <<'PY'
 import json, sys
@@ -44,6 +42,7 @@ TEST_SIZE="$(json_get test_size)"
 PREP_DIR="$(json_get prepared_dev_dir)"
 ENH_DIR="$(json_get enh_out_dir)"
 METRICS_OUT="$(json_get metrics_out)"
+
 mkdir -p "$PREP_DIR" "$ENH_DIR" "$(dirname "$METRICS_OUT")"
 
 # Backends
@@ -62,7 +61,19 @@ echo "  metrics_out=$METRICS_OUT"
 echo "  backends=${#BACKENDS[@]}"
 echo "  INGEST=$INGEST  ENH_DEVICE=${ENH_DEVICE:-cpu}"
 
-# 2) Ingesta opcional Drive→HF
+# ---- helpers de entornos ----
+ENH_VENV="${ENH_VENV:-.venv}"              # tu venv actual (enhancement)
+METRICS_VENV="${METRICS_VENV:-.venv-metrics}"  # nuevo venv (métricas)
+
+use_venv() {
+  local v="$1"
+  [[ -f "$v/bin/activate" ]] || { echo "ERROR: venv no encontrado: $v"; exit 1; }
+  # shellcheck disable=SC1090
+  source "$v/bin/activate"
+}
+
+# 2) Ingesta opcional Drive→HF (usa .venv)
+use_venv "$ENH_VENV"
 if [[ "$INGEST" == "1" ]]; then
   echo "[1] ingest_drive_to_hf.py"
   : "${GOOGLE_APPLICATION_CREDENTIALS:?falta GOOGLE_APPLICATION_CREDENTIALS}"
@@ -72,18 +83,18 @@ if [[ "$INGEST" == "1" ]]; then
   python dataset-audio-raw/ingest_drive_to_hf.py
 fi
 
-# 3) Splits (idempotente)
+# 3) Splits (idempotente)  [.venv]
 echo "[2] gen_splits"
 python preprocesing/gen_splits.py \
   --dataset-dir "$DATASET_DIR" \
   --dev-size "$DEV_SIZE" \
   --test-size "$TEST_SIZE"
 
-# 4) Prep dev
+# 4) Prep dev  [.venv]
 echo "[3] prep_dev"
 python preprocesing/prep_dev.py --config "$CFG"
 
-# 5) Enhancement por backend
+# 5) Enhancement por backend  [.venv]
 echo "[4] enhancement"
 for LINE in "${BACKENDS[@]}"; do
   IFS=':' read -r B P <<<"$LINE"
@@ -93,11 +104,15 @@ for LINE in "${BACKENDS[@]}"; do
   ENH_BACKEND="$B" ENH_PRESET="$P" ENH_DEVICE="${ENH_DEVICE:-cpu}" \
   python enh/run_enh_dev.py
 done
+deactivate
 
-# 6) Métricas
+# 6) Métricas (NISQA/DNSMOS)  [.venv-metrics]
 echo "[5] metrics"
+use_venv "$METRICS_VENV"
 python enh/compute_metrics.py \
   --dataset-dir "$DATASET_DIR" \
-  --out-csv "$METRICS_OUT"
+  --out-csv "$METRICS_OUT" \
+  --ref-source prep
+deactivate
 
 echo "[done] Resultado: $METRICS_OUT"
