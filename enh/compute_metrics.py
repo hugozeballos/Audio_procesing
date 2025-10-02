@@ -366,7 +366,9 @@ def main():
             "clip_rate_ref","clip_rate",
             "snr_db","si_sdr_db",
             "snr_seg_db", "spectral_dist_db",
+            "nisqa_overall_ref","nisqa_noisiness_ref","nisqa_discontinuity_ref","nisqa_coloration_ref","nisqa_loudness_ref",
             "nisqa_overall","nisqa_noisiness","nisqa_discontinuity","nisqa_coloration","nisqa_loudness",
+            "dnsmos_sig_ref","dnsmos_bak_ref","dnsmos_ovrl_ref",
             "dnsmos_sig","dnsmos_bak","dnsmos_ovrl",
             "rtf",
         ])
@@ -411,10 +413,10 @@ def main():
                         "",                        # clip_rate
                         "", "", "",                # stoi, srmr_ref, srmr
                         "", "", "",                # snr_seg, spectral_dist
-                        # NISQA (5 columnas nuevas, vacías en fallback)
-                        "", "", "", "", "",
-                        # DNSMOS (3 columnas nuevas, vacías en fallback)
-                        "", "", "",
+                        "", "", "", "", "",        # NISQA_ref (5)
+                        "", "", "", "", "",        # NISQA_out (5)
+                        "", "", "",                # DNSMOS_ref (3)
+                        "", "", "",                # DNSMOS_out (3)
                         "",                        # rtf
                     ])
                     continue
