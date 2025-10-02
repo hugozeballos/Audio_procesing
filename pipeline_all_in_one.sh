@@ -14,7 +14,6 @@
 #   INGEST=1 bash pipeline_all_in_one.sh
 
 set -euo pipefail
-mkdir -p logs
 
 # 0) Raíz del repo
 cd "${SLURM_SUBMIT_DIR:-$PWD}" || { echo "cd fallo"; exit 1; }
