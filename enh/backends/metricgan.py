@@ -3,9 +3,11 @@ from __future__ import annotations
 import numpy as np
 from scipy.signal import resample_poly
 import torch
-from speechbrain.pretrained import SpectralMaskEnhancement
 from .base import BackendBase
 from utils.audio_prep import peak_normalize_minus1_dbfs as peak_norm
+
+from speechbrain.inference import SpectralMaskEnhancement  # was: speechbrain.pretrained
+
 
 def _to_mono(x: np.ndarray) -> np.ndarray:
     return x if x.ndim == 1 else x.mean(axis=1).astype(np.float32)

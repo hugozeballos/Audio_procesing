@@ -67,22 +67,25 @@ class ResembleEnh:
         x = _to_mono(x)
         xin = _resample_unsafe(x, sr, self.TARGET_SR)
 
-        wav = torch.from_numpy(xin).to(self.device)  # 1D tensor
+        # IMPORTANTE: mantener entrada en CPU como NumPy. La lib gestiona el device internamente.
+        wav = xin  # np.float32, 1D
+        use_device = self.device if (self.device and self.device.startswith("cuda") and torch.cuda.is_available()) else "cpu"
+
         lambd = 0.9 if self.cfg.denoise_first else 0.1
 
         with torch.no_grad():
             if self.cfg.denoise_first:
-                dwav, _ = r_denoise(wav, self.TARGET_SR, self.device)
-                dwav = dwav.squeeze().to(self.device)
-                enh, _ = r_enhance(dwav, self.TARGET_SR, self.device, solver=self.cfg.solver.lower(),
+                dwav, _ = r_denoise(wav, self.TARGET_SR, use_device)
+                dwav = dwav.squeeze().to(use_device)
+                enh, _ = r_enhance(dwav, self.TARGET_SR, use_device, solver=self.cfg.solver.lower(),
                                    nfe=self.cfg.nfe,
                                    lambd=lambd, tau=self.cfg.tau)
             else:
-                enh, _ = r_enhance(wav, self.TARGET_SR, self.device, solver=self.cfg.solver.lower(),
+                enh, _ = r_enhance(wav, self.TARGET_SR, use_device, solver=self.cfg.solver.lower(),
                                    nfe=self.cfg.nfe,
                                    lambd=lambd, tau=self.cfg.tau)
 
-        y = enh.detach().float().cpu().numpy().astype(np.float32)
+        y = np.asarray(enh, dtype=np.float32).reshape(-1)
         if self.cfg.post_gain_db != 0.0:
             g = 10 ** (self.cfg.post_gain_db / 20.0)
             y = (y * g).astype(np.float32)

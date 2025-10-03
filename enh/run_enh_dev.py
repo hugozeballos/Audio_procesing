@@ -36,6 +36,10 @@ load_dotenv(find_dotenv())
 BACKEND_NAME = os.getenv("ENH_BACKEND", "metricgan")
 PRESET       = os.getenv("ENH_PRESET", "medium")
 
+if BACKEND_NAME == "resemble_enh":
+    # Opción 1: fuerza CPU (robusta)
+    os.environ["ENH_DEVICE"] = "cpu"
+
 def get_backend(name: str):
     cls = BACKENDS.get(name.lower())
     if cls is None:

@@ -23,7 +23,19 @@ try:
 except Exception:
     _srmr = None
 
-# --- util: resample robusto sin depender de scipy/librosa ---
+# NISQA / DNSMOS vía torchmetrics (opcionales)
+try:
+    import torch
+    from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment as _NISQA
+except Exception:
+    _NISQA = None
+try:
+    from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore as _DNSMOS
+except Exception:
+    _DNSMOS = None
+
+
+    # --- util: resample robusto sin depender de scipy/librosa ---
 def _resample_to(sr_in: int, x: np.ndarray, sr_out: int) -> np.ndarray:
     if sr_in == sr_out:
         return x.astype(np.float32, copy=False)
@@ -39,6 +51,58 @@ def _resample_to(sr_in: int, x: np.ndarray, sr_out: int) -> np.ndarray:
 
 def _to_mono(x: np.ndarray) -> np.ndarray:
     return x.mean(axis=1).astype(np.float32) if x.ndim == 2 else x.astype(np.float32)
+
+def _resample_for_metrics(x: np.ndarray, sr: int, tgt_sr: int = 16000) -> tuple[np.ndarray,int]:
+    """
+    Mono + 16 kHz para métricas no intrusivas basadas en torchmetrics.
+    Idempotente: si ya viene a tgt_sr, solo convierte a mono/float32.
+    """
+    if x.size == 0 or sr <= 0:
+        return x, sr
+    if sr != tgt_sr:
+        x = _resample_to(sr, _to_mono(x), tgt_sr)
+        return x, tgt_sr
+    return _to_mono(x), sr
+
+_NISQA_MODEL = None
+def _nisqa_scores(x: np.ndarray, sr: int):
+    """Devuelve (overall, noisiness, discontinuity, coloration, loudness) o None."""
+    global _NISQA_MODEL
+    if _NISQA is None or x.size == 0 or sr <= 0:
+        return None
+    try:
+        x16, fs = _resample_for_metrics(x, sr, 16000)
+        if _NISQA_MODEL is None:
+            _NISQA_MODEL = _NISQA(fs=fs).eval()
+        with torch.no_grad():
+            t = torch.from_numpy(x16).float().unsqueeze(0)  # [1, T]
+            vals = _NISQA_MODEL(t)  # tensor (5,)
+            out = vals.detach().cpu().numpy().astype(float).tolist()
+            return tuple(out)  # overall, noisiness, discontinuity, coloration, loudness
+    except Exception:
+        return None
+
+_DNSMOS_MODEL = None
+def _dnsmos_scores(x: np.ndarray, sr: int, personalized: bool = False):
+    """Devuelve (sig, bak, ovrl) o None."""
+    global _DNSMOS_MODEL
+    if _DNSMOS is None or x.size == 0 or sr <= 0:
+        return None
+    try:
+        x16, fs = _resample_for_metrics(x, sr, 16000)
+        if _DNSMOS_MODEL is None:
+            _DNSMOS_MODEL = _DNSMOS(fs=fs, personalized=personalized)
+        with torch.no_grad():
+            t = torch.from_numpy(x16).float().unsqueeze(0)
+            res = _DNSMOS_MODEL(t)
+            if isinstance(res, dict):
+                sig = float(res["SIG"]); bak = float(res["BAK"]); ovrl = float(res["OVRL"])
+            else:
+                r = res.detach().cpu().numpy().tolist()
+                sig, bak, ovrl = float(r[0]), float(r[1]), float(r[2])
+            return (sig, bak, ovrl)
+    except Exception:
+        return None
 
 def _dur(x: np.ndarray, sr: int) -> float:
     return 0.0 if sr <= 0 else len(x) / float(sr)
@@ -302,6 +366,10 @@ def main():
             "clip_rate_ref","clip_rate",
             "snr_db","si_sdr_db",
             "snr_seg_db", "spectral_dist_db",
+            "nisqa_overall_ref","nisqa_noisiness_ref","nisqa_discontinuity_ref","nisqa_coloration_ref","nisqa_loudness_ref",
+            "nisqa_overall","nisqa_noisiness","nisqa_discontinuity","nisqa_coloration","nisqa_loudness",
+            "dnsmos_sig_ref","dnsmos_bak_ref","dnsmos_ovrl_ref",
+            "dnsmos_sig","dnsmos_bak","dnsmos_ovrl",
             "rtf",
         ])
 
@@ -345,6 +413,10 @@ def main():
                         "",                        # clip_rate
                         "", "", "",                # stoi, srmr_ref, srmr
                         "", "", "",                # snr_seg, spectral_dist
+                        "", "", "", "", "",        # NISQA_ref (5)
+                        "", "", "", "", "",        # NISQA_out (5)
+                        "", "", "",                # DNSMOS_ref (3)
+                        "", "", "",                # DNSMOS_out (3)
                         "",                        # rtf
                     ])
                     continue
@@ -355,12 +427,16 @@ def main():
                 srmr_out = _srmr_score(out_x, out_sr)
                 peak_out = _peak_dbfs(out_x)
                 rms_out  = _rms_dbfs(out_x)
+
+                # NISQA / DNSMOS (no intrusivas, 16 kHz)
+                nisqa_vals = _nisqa_scores(out_x, out_sr)
+                dnsmos_vals = _dnsmos_scores(out_x, out_sr)
                 
                 snr_val = sisdr_val = snr_seg_val = spectral_dist_val = None
                 
 
                 # métricas de referencia
-                dur_ref = lufs_ref = srmr_ref = peak_ref = rms_ref = clip_ref = None
+                dur_ref = lufs_ref = srmr_ref = peak_ref = rms_ref = clip_ref = nisqa_vals_ref = dnsmos_vals_ref = None
                 stoi_val = None
                 if ref_x is not None and ref_sr:
                     dur_ref  = _dur(ref_x, ref_sr)
@@ -376,13 +452,16 @@ def main():
                     sisdr_val = si_sdr_db(ref_cmp, out_x, out_sr, align=True)
                     snr_seg_val = snr_segmental_db(ref_cmp, out_x, out_sr, align=True)  # ← NUEVO CÁLCULO
                     spectral_dist_val = spectral_distortion_db(ref_cmp, out_x, out_sr, align=True)  # ← NUEVO CÁLCULO
-
+                    # NISQA / DNSMOS (referencia)
+                    nisqa_vals_ref = _nisqa_scores(ref_x, ref_sr)
+                    dnsmos_vals_ref = _dnsmos_scores(ref_x, ref_sr)
                     
 
                 # deltas
                 dur_diff = (dur_out - dur_ref) if dur_ref is not None else None
                 delta_lufs = (lufs_out - lufs_ref) if (lufs_out is not None and lufs_ref is not None) else None
-
+                # Defaults si no hubo ref
+                nisqa_vals_ref = locals().get("nisqa_vals_ref", None); dnsmos_vals_ref = locals().get("dnsmos_vals_ref", None)
                 w.writerow([
                     backend, preset, str(rel),
                     str(ref_path), str(out_path),
@@ -404,8 +483,28 @@ def main():
                     f"{clip_out:.6f}",
                     f"{snr_val:.2f}"   if snr_val   is not None else "",
                     f"{sisdr_val:.2f}" if sisdr_val is not None else "",
-                    f"{snr_seg_val:.2f}" if snr_seg_val is not None else "",  # ← NUEVA MÉTRICA
-                    f"{spectral_dist_val:.2f}" if spectral_dist_val is not None else "",  # ← NUEVA MÉTRICA
+                    f"{snr_seg_val:.2f}" if snr_seg_val is not None else "",
+                    f"{spectral_dist_val:.2f}" if spectral_dist_val is not None else "",
+                   # NISQA ref (5)
+                    f"{nisqa_vals_ref[0]:.3f}" if nisqa_vals_ref else "",
+                    f"{nisqa_vals_ref[1]:.3f}" if nisqa_vals_ref else "",
+                    f"{nisqa_vals_ref[2]:.3f}" if nisqa_vals_ref else "",
+                    f"{nisqa_vals_ref[3]:.3f}" if nisqa_vals_ref else "",
+                    f"{nisqa_vals_ref[4]:.3f}" if nisqa_vals_ref else "",
+                    # NISQA out (5)
+                    f"{nisqa_vals[0]:.3f}" if nisqa_vals else "",
+                    f"{nisqa_vals[1]:.3f}" if nisqa_vals else "",
+                    f"{nisqa_vals[2]:.3f}" if nisqa_vals else "",
+                    f"{nisqa_vals[3]:.3f}" if nisqa_vals else "",
+                    f"{nisqa_vals[4]:.3f}" if nisqa_vals else "",
+                    # DNSMOS ref (3)
+                    f"{dnsmos_vals_ref[0]:.3f}" if dnsmos_vals_ref else "",
+                    f"{dnsmos_vals_ref[1]:.3f}" if dnsmos_vals_ref else "",
+                    f"{dnsmos_vals_ref[2]:.3f}" if dnsmos_vals_ref else "",
+                    # DNSMOS out (3)
+                    f"{dnsmos_vals[0]:.3f}" if dnsmos_vals else "",
+                    f"{dnsmos_vals[1]:.3f}" if dnsmos_vals else "",
+                    f"{dnsmos_vals[2]:.3f}" if dnsmos_vals else "",
                     "",  # rtf pendiente
                 ])
 
