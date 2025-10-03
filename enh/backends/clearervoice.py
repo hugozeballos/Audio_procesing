@@ -4,6 +4,12 @@ import numpy as np
 import soundfile as sf
 from .base import BackendBase
 
+try:
+    from clearvoice import ClearVoice
+    self.mode = "py"
+except Exception:
+    raise RuntimeError("[clearervoice] Python API not available")
+
 # opcional: mejor resample
 try:
     import librosa
