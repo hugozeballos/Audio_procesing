@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # Usage: python scripts/clearervoice_cli.py --input in.wav --output out.wav --preset medium
 import argparse, sys, soundfile as sf, numpy as np
+import shutil, subprocess, tempfile, pathlib
+
 
 def _try_import_api():
     # Try common ClearVoice entrypoints
@@ -26,11 +28,17 @@ def main():
 
     mode, api = _try_import_api()
     if api is None:
-        sys.stderr.write(
-            "[clearervoice_cli] No ClearVoice Python API found. "
-            "Ensure the 'clearvoice' package exposes an enhancer function.\n"
-        )
-        sys.exit(2)
+        cli = shutil.which("clearervoice")
+        if not cli:
+            sys.stderr.write("[clearervoice_cli] No Python API and no 'clearervoice' binary in PATH.\n")
+            sys.exit(2)
+        # usar CLI externo
+        cmd = [cli, "--preset", args.preset, "-i", args.input, "-o", args.output]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.stderr.write(f"[clearervoice_cli] CLI failed: {r.stderr or r.stdout}\n")
+            sys.exit(r.returncode)
+        sys.exit(0)
 
     y, sr = sf.read(args.input, always_2d=False)
     if y.dtype != np.float32:
