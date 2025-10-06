@@ -47,5 +47,3 @@ cp metrics.csv /mnt-homes/kraken/hugoz/metrics.csv
 probsr compute metrics
 
 python enh/compute_metrics.py --dataset-dir dataset-audio-raw --out-csv artifacts/metrics.csv
-
-scp hugoz@kraken.ing.puc.cl:/home/hugoz/archive/Audio_procesing/artifacts/metrics.csv .

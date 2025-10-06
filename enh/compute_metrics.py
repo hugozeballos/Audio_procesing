@@ -122,11 +122,12 @@ def list_prep(root: Path) -> Dict[str, Path]:
     return idx
 
 def list_enh(root: Path) -> List[Path]:
-    """List enh/<backend>/<preset>/*.wav."""
+    """List all WAVs under enh recursively, e.g. enh/<backend>/<preset>/data/raw/YYYY/MM/DD/*.wav"""
     enh_root = root / "enh"
     if not enh_root.exists():
         return []
-    return sorted(enh_root.glob("*/*/*.wav"))
+    exts = {".wav", ".WAV"}  # agrega más si usas .flac
+    return sorted(p for p in enh_root.rglob("*") if p.suffix in exts)
 
 # ---------- main ----------
 
@@ -173,9 +174,10 @@ def main():
             row = dict.fromkeys(header, None)
             try:
                 rel_enh = enh.relative_to(base).as_posix()
-                parts = enh.parts
-                backend = parts[-3] if len(parts) >= 3 else ""
-                preset  = parts[-2] if len(parts) >= 2 else ""
+                # extraer backend y preset respecto a base/enh
+                rel_parts = enh.relative_to(base / "enh").parts
+                backend = rel_parts[0] if len(rel_parts) >= 2 else ""
+                preset  = rel_parts[1] if len(rel_parts) >= 2 else ""
                 stem = enh.stem
 
                 prep = prep_idx.get(stem)
