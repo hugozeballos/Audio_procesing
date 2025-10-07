@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH -J enh_benchmark
-#SBATCH --partition=ialab-high
+#SBATCH --partition=ialab-eph
 #SBATCH --gres=gpu:2080_super:1
 #SBATCH -t 04:00:00
 #SBATCH --mem=16G
