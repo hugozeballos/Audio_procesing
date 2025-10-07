@@ -81,7 +81,7 @@ if [[ "$INGEST" == "1" ]]; then
   : "${HF_REPO_ID:?falta HF_REPO_ID}"
   python dataset-audio-raw/ingest_drive_to_hf.py
 fi
-
+use_venv "$ENH_VENV"
 # 3) Splits (idempotente)  [.venv]
 echo "[2] gen_splits"
 python preprocesing/gen_splits.py \
