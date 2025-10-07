@@ -1,9 +1,0 @@
-,stoi,stoi,stoi,srmr,srmr,srmr,snr_db,snr_db,snr_db,si_sdr_db,si_sdr_db,si_sdr_db,lufs,lufs,lufs,delta_lufs,delta_lufs,delta_lufs,clip_rate,clip_rate,clip_rate
-,count,median,mean,count,median,mean,count,median,mean,count,median,mean,count,median,mean,count,median,mean,count,median,mean
-backend,,,,,,,,,,,,,,,,,,,,,
-base,0,,,0,,,0,,,0,,,28,-20.255000000000003,-20.419285714285714,0,,,28,0.0,0.0
-clearervoice,0,,,0,,,0,,,0,,,3,-19.87,-20.523333333333333,0,,,3,0.0,0.0
-deepfilternet,0,,,0,,,0,,,0,,,3,-20.01,-20.680000000000003,0,,,3,0.0,0.0
-metricgan,0,,,0,,,0,,,0,,,55,-19.28,-19.456545454545452,0,,,55,0.0,0.0
-resemble_enh,0,,,0,,,0,,,0,,,5,-20.2,-20.266,0,,,5,0.0,0.0
-sepformer,0,,,0,,,0,,,0,,,3,-19.03,-18.900000000000002,0,,,3,0.0,0.0

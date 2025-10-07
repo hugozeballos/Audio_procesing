@@ -2,7 +2,7 @@
 # viz_metrics.py
 # Uso:
 #   python viz_metrics.py --root /ruta/al/dataset
-#   # por defecto busca en ./enh/ los CSVs:
+#   # por defecto busca en ./enh/ los CSVs:cp metr  
 #   #   enh_metrics_pair.csv, enh_metrics_pair_summary.csv, enh_metrics_no_ref.csv
 import argparse, os
 from pathlib import Path
