@@ -5,6 +5,12 @@ import torch
 from dataclasses import dataclass
 from scipy.signal import resample_poly
 from resemble_enhance.enhancer.inference import denoise as r_denoise, enhance as r_enhance
+import sys, logging
+
+
+log = logging.getLogger("resemble_enh")
+if not log.handlers:
+    logging.basicConfig(level=logging.INFO)
 
 def _to_mono(x: np.ndarray) -> np.ndarray:
     return x.mean(axis=1).astype(np.float32) if x.ndim == 2 else x.astype(np.float32)
@@ -41,6 +47,7 @@ class ResembleEnh:
 
     def __init__(self, device: str | None = None, preset: str = "medium"):
         self.device = device or os.getenv("ENH_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.debug = bool(int(os.getenv("ENH_DEBUG", "0")))
         preset = preset.lower()
         self.cfgs = {
             "light": _Cfg(solver="Midpoint", nfe=32,  tau=0.45, denoise_first=False, post_gain_db=0.0),
@@ -64,6 +71,9 @@ class ResembleEnh:
         return y, note
 
     def process(self, x: np.ndarray, sr: int) -> tuple[np.ndarray, int]:
+        if self.debug:
+             log.info(f"[res] start sr={sr} len_in={len(x)} device={self.device} preset={self.cfg}")
+
         x = _to_mono(x)
         xin = _resample_unsafe(x, sr, self.TARGET_SR)
 
@@ -73,17 +83,22 @@ class ResembleEnh:
 
         lambd = 0.9 if self.cfg.denoise_first else 0.1
 
-        with torch.no_grad():
-            if self.cfg.denoise_first:
-                dwav, _ = r_denoise(wav, self.TARGET_SR, use_device)
-                dwav = dwav.squeeze().to(use_device)
-                enh, _ = r_enhance(dwav, self.TARGET_SR, use_device, solver=self.cfg.solver.lower(),
-                                   nfe=self.cfg.nfe,
-                                   lambd=lambd, tau=self.cfg.tau)
-            else:
-                enh, _ = r_enhance(wav, self.TARGET_SR, use_device, solver=self.cfg.solver.lower(),
-                                   nfe=self.cfg.nfe,
-                                   lambd=lambd, tau=self.cfg.tau)
+        try:
+            with torch.inference_mode():
+                if self.cfg.denoise_first:
+                    dwav, _ = r_denoise(wav, self.TARGET_SR, use_device)
+                    dwav = dwav.squeeze().to(use_device)
+                    enh, _ = r_enhance(dwav, self.TARGET_SR, use_device, solver=self.cfg.solver.lower(),
+                                    nfe=self.cfg.nfe,
+                                    lambd=lambd, tau=self.cfg.tau)
+                else:
+                    enh, _ = r_enhance(wav, self.TARGET_SR, use_device, solver=self.cfg.solver.lower(),
+                                    nfe=self.cfg.nfe,
+                                    lambd=lambd, tau=self.cfg.tau)
+                    
+        except Exception as e:
+            log.error(f"[res] fail: {type(e).__name__}: {e} | sr_in={sr} len_in={len(x)} device={use_device} preset={self.cfg}",
+                    exc_info=self.debug)
 
         y = np.asarray(enh, dtype=np.float32).reshape(-1)
         if self.cfg.post_gain_db != 0.0:
@@ -92,4 +107,6 @@ class ResembleEnh:
 
         y = _peak_norm_minus1_dbfs(y)
         y = _resample_unsafe(y, self.TARGET_SR, sr)
+        if self.debug:
+            log.info(f"[res] done len_out={len(y)} target_sr={self.TARGET_SR}")
         return y.astype(np.float32), sr
