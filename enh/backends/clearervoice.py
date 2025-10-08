@@ -68,7 +68,7 @@ class ClearerVoiceBackend(BackendBase):
             outp = td / "out.wav"
             sf.write(inp, x.astype(np.float32), sr_in)
             # infer vía CLI
-            cmd = self.cmd_tpl.format(**{'in': str(inp), 'out': str(outp), 'preset': self.preset})
+            cmd = self.cmd_tpl.format(inp=str(inp), outp=str(outp), preset=self.preset)
             subprocess.run(shlex.split(cmd), check=True)
             y_ret, sr_ret = sf.read(outp, always_2d=False)
 
