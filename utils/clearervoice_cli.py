@@ -33,7 +33,7 @@ def main():
             sys.stderr.write("[clearervoice_cli] No Python API and no 'clearervoice' binary in PATH.\n")
             sys.exit(2)
         # usar CLI externo
-        cmd = [cli, "--preset", args.preset, "-i", args.input, "-o", args.output]
+        cmd = [cli, "--preset", args.preset, "--device", args.device, "-i", args.input, "-o", args.output]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             sys.stderr.write(f"[clearervoice_cli] CLI failed: {r.stderr or r.stdout}\n")
