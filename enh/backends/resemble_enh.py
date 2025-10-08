@@ -82,7 +82,7 @@ class ResembleEnh:
         use_device = self.device if (self.device and self.device.startswith("cuda") and torch.cuda.is_available()) else "cpu"
 
         lambd = 0.9 if self.cfg.denoise_first else 0.1
-
+        enh = None
         try:
             with torch.inference_mode():
                 if self.cfg.denoise_first:
@@ -99,7 +99,10 @@ class ResembleEnh:
         except Exception as e:
             log.error(f"[res] fail: {type(e).__name__}: {e} | sr_in={sr} len_in={len(x)} device={use_device} preset={self.cfg}",
                     exc_info=self.debug)
+            enh = wav  # fallback: devuelve entrada para no romper el pipeline
 
+        if isinstance(enh, torch.Tensor):
+            enh = enh.detach().cpu().numpy()
         y = np.asarray(enh, dtype=np.float32).reshape(-1)
         if self.cfg.post_gain_db != 0.0:
             g = 10 ** (self.cfg.post_gain_db / 20.0)
