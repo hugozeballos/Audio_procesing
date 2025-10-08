@@ -1,14 +1,12 @@
 # enh/backends/clearervoice.py
-import os, tempfile, pathlib
+import os, tempfile, pathlib, subprocess, shlex
 import numpy as np
 import soundfile as sf
 from .base import BackendBase
 
-try:
-    from clearvoice import ClearVoice
-    self.mode = "py"
-except Exception:
-    raise RuntimeError("[clearervoice] Python API not available")
+CMD = os.getenv("ENH_CLEARERVOICE_CMD")  # ej: 'clearervoice --preset {preset} -i {in} -o {out}'
+if not CMD:
+    raise RuntimeError("ENH_CLEARERVOICE_CMD no definido (modo CLI)")
 
 # opcional: mejor resample
 try:
@@ -41,14 +39,11 @@ class ClearerVoiceBackend(BackendBase):
         self.NAME = "clearervoice"
         self.preset = (preset or os.getenv("ENH_PRESET") or "medium").lower()
 
-        try:
-            from clearvoice import ClearVoice  # import tardío para errores claros
-            model_name, target_sr = PRESET2MODEL.get(self.preset, PRESET2MODEL["medium"])
-            self._target_sr = target_sr
-            self._cv = ClearVoice(task="speech_enhancement",
-                                  model_names=[model_name])
-        except Exception as e:
-            raise RuntimeError(f"[clearervoice] No se pudo inicializar: {e}")
+        model_name, target_sr = PRESET2MODEL.get(self.preset, PRESET2MODEL["medium"])
+        self._target_sr = target_sr
+        self.cmd_tpl = CMD
+        self.mode = "cli"
+
 
     def process(self, x: np.ndarray, sr: int):
         mono = False
@@ -72,19 +67,9 @@ class ClearerVoiceBackend(BackendBase):
             inp = td / "in.wav"
             outp = td / "out.wav"
             sf.write(inp, x.astype(np.float32), sr_in)
-            # infer
-            out = self._cv(input_path=str(inp), online_write=False)
-            if isinstance(out, dict):
-                # toma primer stream (array [C, T] o [T])
-                y = next(iter(out.values()))
-            else:
-                y = out
-            y = np.array(y)
-            # normaliza shape a [T]
-            if y.ndim == 2:
-                # si stereo, mezcla a mono para mantener contrato
-                y = y.mean(axis=0)
-            sf.write(outp, y.astype(np.float32), self._target_sr)
+            # infer vía CLI
+            cmd = self.cmd_tpl.format(**{'in': str(inp), 'out': str(outp), 'preset': self.preset})
+            subprocess.run(shlex.split(cmd), check=True)
             y_ret, sr_ret = sf.read(outp, always_2d=False)
 
         # mantiene mono. si quieres devolver estéreo, duplica canales aquí.
@@ -94,11 +79,8 @@ class ClearerVoiceBackend(BackendBase):
         # permitir override de preset en tiempo de ejecución
         if preset and preset.lower() != self.preset:
             model_name, target_sr = PRESET2MODEL.get(preset.lower(), PRESET2MODEL["medium"])
+            self.preset = preset.lower()
             self._target_sr = target_sr
-            # recarga modelo si cambia
-            from clearvoice import ClearVoice
-            self._cv = ClearVoice(task="speech_enhancement",
-                                  model_names=[model_name])
         y, sr_out = self.process(x, sr)
         info = {"preset": preset or self.preset, "sr_out": sr_out, "backend": self.NAME}
         return y, info
