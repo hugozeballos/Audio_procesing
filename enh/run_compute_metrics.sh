@@ -12,12 +12,13 @@
 set -euo pipefail
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
+cd ..
 
 # vars del cluster si las tienes
 [[ -f cluster/env.sh ]] && source cluster/env.sh
 
 # leer config/experiment_config.json
-CFG="config/experiment_config.json"
+CFG="/config/experiment_config.json"
 json_get () {
 python - "$CFG" "$1" <<'PY'
 import json, sys
