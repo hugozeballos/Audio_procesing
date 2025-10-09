@@ -12,7 +12,7 @@
 set -euo pipefail
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
-cd ..
+
 
 # vars del cluster si las tienes
 [[ -f cluster/env.sh ]] && source cluster/env.sh
