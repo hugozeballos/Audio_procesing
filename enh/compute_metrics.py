@@ -187,84 +187,95 @@ def _emb_cluster_metrics(x: np.ndarray, sr: int, mask: Optional[np.ndarray],
     between_cluster_min_cos, cluster_size_cv
     o todos None si faltan deps.
     """
-    if torch is None or EncoderClassifier is None or AgglomerativeClustering is None \
-       or silhouette_score is None:
-        return {
-            "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
-            "db_index": None, "calinski_harabasz": None,
-            "between_cluster_min_cos": None, "cluster_size_cv": None,
-        }
-    ecapa = _get_ecapa()
-    if ecapa is None:
-        return {
-            "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
-            "db_index": None, "calinski_harabasz": None,
-            "between_cluster_min_cos": None, "cluster_size_cv": None,
-        }
-
-    win = int(sr * win_s); hop = int(sr * hop_s)
-    if win <= 0 or len(x) < win:
-        return {k: None for k in [
-            "emb_temporal_smoothness","num_clusters","silhouette","db_index",
-            "calinski_harabasz","between_cluster_min_cos","cluster_size_cv"]}
-
-    seg_embs = []
-    for i in range(0, len(x) - win + 1, hop):
-        if mask is not None and not mask[i:i+win].any():
-            continue
-        seg = x[i:i+win]
-        t = torch.from_numpy(seg).float().unsqueeze(0)
-        try:
-            emb = ecapa.encode_batch(t).squeeze(0).squeeze(0).detach().cpu().numpy()
-            seg_embs.append(emb)
-        except Exception:
-            break
-    if len(seg_embs) < 3:
-        return {k: None for k in [
-            "emb_temporal_smoothness","num_clusters","silhouette","db_index",
-            "calinski_harabasz","between_cluster_min_cos","cluster_size_cv"]}
-
-    E = np.vstack(seg_embs)
-
-    def _cos(a,b):
-        na = np.linalg.norm(a)+EPS; nb = np.linalg.norm(b)+EPS
-        return float(np.dot(a,b)/(na*nb))
-
-    sims = [_cos(E[i], E[i+1]) for i in range(len(E)-1)]
-    smooth = float(np.median(sims))
-
-    # clustering con AHC y métrica coseno
-    ahc = AgglomerativeClustering(n_clusters=None, distance_threshold=0.35, affinity="cosine", linkage="average")
-    labels = ahc.fit_predict(E)
-    num_clusters = int(len(np.unique(labels)))
-
     try:
-        sil = float(silhouette_score(E, labels, metric="cosine")) if num_clusters>1 else None
-        dbi = float(davies_bouldin_score(E, labels)) if num_clusters>1 else None
-        ch  = float(calinski_harabasz_score(E, labels)) if num_clusters>1 else None
-        cents = np.vstack([E[labels==c].mean(axis=0) for c in range(num_clusters)])
-        if num_clusters>1:
-            cs = []
-            for i in range(num_clusters):
-                for j in range(i+1, num_clusters):
-                    cs.append(_cos(cents[i], cents[j]))
-            between_min_cos = float(min(cs))
-        else:
-            between_min_cos = None
-        sizes = np.array([(labels==c).sum() for c in range(num_clusters)], dtype=float)
-        cluster_cv = float(sizes.std()/(sizes.mean()+EPS)) if num_clusters>1 else 0.0
-    except Exception:
-        sil = dbi = ch = between_min_cos = cluster_cv = None
+        if torch is None or EncoderClassifier is None or AgglomerativeClustering is None \
+        or silhouette_score is None:
+            return {
+                "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
+                "db_index": None, "calinski_harabasz": None,
+                "between_cluster_min_cos": None, "cluster_size_cv": None,
+            }
+        ecapa = _get_ecapa()
+        if ecapa is None:
+            return {
+                "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
+                "db_index": None, "calinski_harabasz": None,
+                "between_cluster_min_cos": None, "cluster_size_cv": None,
+            }
 
-    return {
-        "emb_temporal_smoothness": round(smooth, 6),
-        "num_clusters": num_clusters,
-        "silhouette": None if sil is None else round(sil, 6),
-        "db_index": None if dbi is None else round(dbi, 6),
-        "calinski_harabasz": None if ch is None else round(ch, 6),
-        "between_cluster_min_cos": None if between_min_cos is None else round(between_min_cos, 6),
-        "cluster_size_cv": None if cluster_cv is None else round(cluster_cv, 6),
-    }
+        win = int(sr * win_s); hop = int(sr * hop_s)
+        if win <= 0 or len(x) < win:
+            return {k: None for k in [
+                "emb_temporal_smoothness","num_clusters","silhouette","db_index",
+                "calinski_harabasz","between_cluster_min_cos","cluster_size_cv"]}
+
+        seg_embs = []
+        for i in range(0, len(x) - win + 1, hop):
+            if mask is not None and not mask[i:i+win].any():
+                continue
+            seg = x[i:i+win]
+            t = torch.from_numpy(seg).float().unsqueeze(0)
+            try:
+                emb = ecapa.encode_batch(t).squeeze(0).squeeze(0).detach().cpu().numpy()
+                seg_embs.append(emb)
+            except Exception:
+                break
+        if len(seg_embs) < 3:
+            return {k: None for k in [
+                "emb_temporal_smoothness","num_clusters","silhouette","db_index",
+                "calinski_harabasz","between_cluster_min_cos","cluster_size_cv"]}
+
+        E = np.vstack(seg_embs)
+
+        def _cos(a,b):
+            na = np.linalg.norm(a)+EPS; nb = np.linalg.norm(b)+EPS
+            return float(np.dot(a,b)/(na*nb))
+
+        sims = [_cos(E[i], E[i+1]) for i in range(len(E)-1)]
+        smooth = float(np.median(sims))
+
+        # clustering con AHC y métrica coseno
+        try:
+            ahc = AgglomerativeClustering(n_clusters=None, distance_threshold=0.35, metric="cosine", linkage="average")
+        except TypeError:
+                # sklearn < 1.2
+            ahc = AgglomerativeClustering(n_clusters=None, distance_threshold=0.35, affinity="cosine", linkage="average")
+        labels = ahc.fit_predict(E)
+        num_clusters = int(len(np.unique(labels)))
+
+        try:
+            sil = float(silhouette_score(E, labels, metric="cosine")) if num_clusters>1 else None
+            dbi = float(davies_bouldin_score(E, labels)) if num_clusters>1 else None
+            ch  = float(calinski_harabasz_score(E, labels)) if num_clusters>1 else None
+            cents = np.vstack([E[labels==c].mean(axis=0) for c in range(num_clusters)])
+            if num_clusters>1:
+                cs = []
+                for i in range(num_clusters):
+                    for j in range(i+1, num_clusters):
+                        cs.append(_cos(cents[i], cents[j]))
+                between_min_cos = float(min(cs))
+            else:
+                between_min_cos = None
+            sizes = np.array([(labels==c).sum() for c in range(num_clusters)], dtype=float)
+            cluster_cv = float(sizes.std()/(sizes.mean()+EPS)) if num_clusters>1 else 0.0
+        except Exception:
+            sil = dbi = ch = between_min_cos = cluster_cv = None
+
+        return {
+            "emb_temporal_smoothness": round(smooth, 6),
+            "num_clusters": num_clusters,
+            "silhouette": None if sil is None else round(sil, 6),
+            "db_index": None if dbi is None else round(dbi, 6),
+            "calinski_harabasz": None if ch is None else round(ch, 6),
+            "between_cluster_min_cos": None if between_min_cos is None else round(between_min_cos, 6),
+            "cluster_size_cv": None if cluster_cv is None else round(cluster_cv, 6),
+        }
+    except Exception:
+        return {
+            "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
+            "db_index": None, "calinski_harabasz": None,
+            "between_cluster_min_cos": None, "cluster_size_cv": None,
+        }
 
 def _maybe_dnsmos(x: np.ndarray, sr: int):
     if DNSMOS is None:
