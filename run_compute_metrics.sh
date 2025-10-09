@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #SBATCH -J enh_metrics
 #SBATCH --partition=ialab-eph
-#SBATCH --gres=gpu:0
-#SBATCH -t 01:00:00
-#SBATCH --mem=8G
+#SBATCH --gres=gpu:2080_super:1
+#SBATCH -t 23:59:00
+#SBATCH --mem=16G
 #SBATCH -o logs/%x-%j.out
 #SBATCH -e logs/%x-%j.err
 #SBATCH --ntasks=1
