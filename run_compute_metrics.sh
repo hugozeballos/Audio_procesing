@@ -17,16 +17,6 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 # vars del cluster si las tienes
 [[ -f cluster/env.sh ]] && source cluster/env.sh
 
-# leer config/experiment_config.json
-CFG="/config/experiment_config.json"
-json_get () {
-python - "$CFG" "$1" <<'PY'
-import json, sys
-with open(sys.argv[1]) as f:
-    cfg = json.load(f)
-print(cfg.get(sys.argv[2], ""))
-PY
-}
 
 DATASET_DIR="dataset-audio-raw"
 METRICS_OUT="artifacts/metrics.csv"
