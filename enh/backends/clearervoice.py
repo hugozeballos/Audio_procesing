@@ -64,8 +64,8 @@ class ClearerVoiceBackend(BackendBase):
         # ClearVoice (vía paths, robusto sin ffmpeg si usamos WAV)
         with tempfile.TemporaryDirectory() as td:
             td = pathlib.Path(td)
-            inp = td / "in.wav"
-            outp = td / "out.wav"
+            inp = td / "inp.wav"
+            outp = td / "outp.wav"
             sf.write(inp, x.astype(np.float32), sr_in)
             # infer vía CLI
             cmd = self.cmd_tpl.format(inp=str(inp), outp=str(outp), preset=self.preset)
