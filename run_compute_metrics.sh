@@ -28,8 +28,8 @@ print(cfg.get(sys.argv[2], ""))
 PY
 }
 
-DATASET_DIR="$(json_get dataset_dir)"
-METRICS_OUT="$(json_get metrics_out)"
+DATASET_DIR="dataset-audio-raw"
+METRICS_OUT="artifacts/metrics.csv"
 
 mkdir -p "$(dirname "$METRICS_OUT")" logs
 
