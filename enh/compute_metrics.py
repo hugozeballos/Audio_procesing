@@ -27,6 +27,32 @@ try:
 except Exception:
     _srmr = None
 
+# --- extra opcionales ---
+try:
+    import webrtcvad
+except Exception:
+    webrtcvad = None
+
+try:
+    from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+    from sklearn.cluster import AgglomerativeClustering
+except Exception:
+    silhouette_score = calinski_harabasz_score = davies_bouldin_score = None
+    AgglomerativeClustering = None
+
+try:
+    import torch
+    from speechbrain.pretrained import EncoderClassifier  # ECAPA embeddings
+except Exception:
+    torch = None
+    EncoderClassifier = None
+
+# MOS opcional
+try:
+    from dnsmos import DNSMOS  # pip install dnsmos
+except Exception:
+    DNSMOS = None
+
 EPS = 1e-12
 
 # ---------- helpers (no external heavy deps) ----------
@@ -89,6 +115,170 @@ def srmr_score(x: np.ndarray, sr: int) -> Optional[float]:
         return float(score)
     except Exception:
         return None
+
+# ---------- NUEVO: VAD + niveles ----------
+def _vad_mask_webrtc(x: np.ndarray, sr: int, frame_ms: int = 30, aggr: int = 2):
+    """Devuelve (mask_bool, frame_sec) o (None, None) si no hay webrtcvad o SR no soportado."""
+    if webrtcvad is None or sr not in (8000, 16000, 32000, 48000):
+        return None, None
+    vad = webrtcvad.Vad(aggr)
+    hop = int(sr * frame_ms / 1000)
+    if hop <= 0 or len(x) < hop:
+        return None, None
+    flags = []
+    for i in range(0, len(x) - hop + 1, hop):
+        seg = x[i:i+hop]
+        pcm = (np.clip(seg, -1, 1) * 32767.0).astype(np.int16).tobytes()
+        flags.append(vad.is_speech(pcm, sr))
+    mask = np.repeat(flags, hop)[:len(x)]
+    return mask.astype(bool), frame_ms / 1000.0
+
+def _vad_stats_and_levels(x: np.ndarray, sr: int, mask: Optional[np.ndarray]):
+    """Dict con vad_speech_ratio, seg_count, seg_mean_dur_s y niveles speech/noise en dBFS + SNR."""
+    if mask is None or mask.size == 0:
+        return {
+            "vad_speech_ratio": None, "vad_seg_count": None, "vad_seg_mean_dur_s": None,
+            "speech_level_dbfs": None, "nonspeech_level_dbfs": None, "speech_nonspeech_snr_db": None,
+        }
+    speech_ratio = float(mask.mean())
+    b = mask.astype(np.int8)
+    ch = np.diff(b, prepend=0)
+    starts = np.where(ch == 1)[0]
+    ends   = np.where(ch == -1)[0]
+    if mask[-1]:
+        ends = np.append(ends, len(mask)-1)
+    durs = (ends - starts) / max(sr, 1)
+    seg_count = int(len(durs))
+    seg_mean = float(durs.mean()) if seg_count > 0 else 0.0
+
+    def _lvl_db(y):
+        if y.size == 0: return None
+        rms = float(np.sqrt(np.mean(y**2) + EPS))
+        return 20.0 * math.log10(rms + EPS)
+
+    sp = x[mask]; ns = x[~mask]
+    sp_db = _lvl_db(sp); ns_db = _lvl_db(ns)
+    snr = None if (sp_db is None or ns_db is None) else (sp_db - ns_db)
+    return {
+        "vad_speech_ratio": round(speech_ratio, 6),
+        "vad_seg_count": seg_count,
+        "vad_seg_mean_dur_s": round(seg_mean, 6),
+        "speech_level_dbfs": None if sp_db is None else round(sp_db, 3),
+        "nonspeech_level_dbfs": None if ns_db is None else round(ns_db, 3),
+        "speech_nonspeech_snr_db": None if snr is None else round(snr, 3),
+    }
+
+# ---------- NUEVO: embeddings/cluster + MOS ----------
+_ECAPA = None
+def _get_ecapa():
+    global _ECAPA
+    if _ECAPA is None and (EncoderClassifier is not None):
+        try:
+            _ECAPA = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+        except Exception:
+            _ECAPA = None
+    return _ECAPA
+
+def _emb_cluster_metrics(x: np.ndarray, sr: int, mask: Optional[np.ndarray],
+                         win_s: float = 1.5, hop_s: float = 0.75):
+    """
+    Devuelve dict con:
+    emb_temporal_smoothness, num_clusters, silhouette, db_index, calinski_harabasz,
+    between_cluster_min_cos, cluster_size_cv
+    o todos None si faltan deps.
+    """
+    if torch is None or EncoderClassifier is None or AgglomerativeClustering is None \
+       or silhouette_score is None:
+        return {
+            "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
+            "db_index": None, "calinski_harabasz": None,
+            "between_cluster_min_cos": None, "cluster_size_cv": None,
+        }
+    ecapa = _get_ecapa()
+    if ecapa is None:
+        return {
+            "emb_temporal_smoothness": None, "num_clusters": None, "silhouette": None,
+            "db_index": None, "calinski_harabasz": None,
+            "between_cluster_min_cos": None, "cluster_size_cv": None,
+        }
+
+    win = int(sr * win_s); hop = int(sr * hop_s)
+    if win <= 0 or len(x) < win:
+        return {k: None for k in [
+            "emb_temporal_smoothness","num_clusters","silhouette","db_index",
+            "calinski_harabasz","between_cluster_min_cos","cluster_size_cv"]}
+
+    seg_embs = []
+    for i in range(0, len(x) - win + 1, hop):
+        if mask is not None and not mask[i:i+win].any():
+            continue
+        seg = x[i:i+win]
+        t = torch.from_numpy(seg).float().unsqueeze(0)
+        try:
+            emb = ecapa.encode_batch(t).squeeze(0).squeeze(0).detach().cpu().numpy()
+            seg_embs.append(emb)
+        except Exception:
+            break
+    if len(seg_embs) < 3:
+        return {k: None for k in [
+            "emb_temporal_smoothness","num_clusters","silhouette","db_index",
+            "calinski_harabasz","between_cluster_min_cos","cluster_size_cv"]}
+
+    E = np.vstack(seg_embs)
+
+    def _cos(a,b):
+        na = np.linalg.norm(a)+EPS; nb = np.linalg.norm(b)+EPS
+        return float(np.dot(a,b)/(na*nb))
+
+    sims = [_cos(E[i], E[i+1]) for i in range(len(E)-1)]
+    smooth = float(np.median(sims))
+
+    # clustering con AHC y métrica coseno
+    ahc = AgglomerativeClustering(n_clusters=None, distance_threshold=0.35, affinity="cosine", linkage="average")
+    labels = ahc.fit_predict(E)
+    num_clusters = int(len(np.unique(labels)))
+
+    try:
+        sil = float(silhouette_score(E, labels, metric="cosine")) if num_clusters>1 else None
+        dbi = float(davies_bouldin_score(E, labels)) if num_clusters>1 else None
+        ch  = float(calinski_harabasz_score(E, labels)) if num_clusters>1 else None
+        cents = np.vstack([E[labels==c].mean(axis=0) for c in range(num_clusters)])
+        if num_clusters>1:
+            cs = []
+            for i in range(num_clusters):
+                for j in range(i+1, num_clusters):
+                    cs.append(_cos(cents[i], cents[j]))
+            between_min_cos = float(min(cs))
+        else:
+            between_min_cos = None
+        sizes = np.array([(labels==c).sum() for c in range(num_clusters)], dtype=float)
+        cluster_cv = float(sizes.std()/(sizes.mean()+EPS)) if num_clusters>1 else 0.0
+    except Exception:
+        sil = dbi = ch = between_min_cos = cluster_cv = None
+
+    return {
+        "emb_temporal_smoothness": round(smooth, 6),
+        "num_clusters": num_clusters,
+        "silhouette": None if sil is None else round(sil, 6),
+        "db_index": None if dbi is None else round(dbi, 6),
+        "calinski_harabasz": None if ch is None else round(ch, 6),
+        "between_cluster_min_cos": None if between_min_cos is None else round(between_min_cos, 6),
+        "cluster_size_cv": None if cluster_cv is None else round(cluster_cv, 6),
+    }
+
+def _maybe_dnsmos(x: np.ndarray, sr: int):
+    if DNSMOS is None:
+        return {"dnsmos_sig": None, "dnsmos_bak": None, "dnsmos_ovrl": None}
+    try:
+        m = DNSMOS()
+        r = m.predict_signal(x, sr)
+        return {
+            "dnsmos_sig": round(float(r.get("SIG", None)), 3),
+            "dnsmos_bak": round(float(r.get("BAK", None)), 3),
+            "dnsmos_ovrl": round(float(r.get("OVRL", None)), 3),
+        }
+    except Exception:
+        return {"dnsmos_sig": None, "dnsmos_bak": None, "dnsmos_ovrl": None}
 
 def metrics_for(x: np.ndarray, sr: int) -> Dict[str, Optional[float]]:
     """Compute all single-ended metrics for one signal."""
@@ -163,6 +353,29 @@ def main():
         "error"
     ]
 
+    # ---------- NUEVO: columnas extra ----------
+    # VAD + niveles + SNR
+    header += [
+        "vad_speech_ratio_in","vad_speech_ratio_out","delta_vad_speech_ratio",
+        "vad_seg_count_in","vad_seg_count_out","delta_vad_seg_count",
+        "vad_seg_mean_dur_in_s","vad_seg_mean_dur_out_s","delta_vad_seg_mean_dur_s",
+        "speech_level_in_dbfs","speech_level_out_dbfs","delta_speech_level_db",
+        "nonspeech_level_in_dbfs","nonspeech_level_out_dbfs","delta_nonspeech_level_db",
+        "speech_nonspeech_snr_in_db","speech_nonspeech_snr_out_db","delta_speech_nonspeech_snr_db",
+    ]
+    # Embeddings/cluster
+    header += [
+        "emb_temporal_smoothness_in","emb_temporal_smoothness_out","delta_emb_temporal_smoothness",
+        "num_clusters_in","num_clusters_out",
+        "silhouette_in","silhouette_out",
+        "db_index_in","db_index_out",
+        "calinski_harabasz_in","calinski_harabasz_out",
+        "between_cluster_min_cos_in","between_cluster_min_cos_out",
+        "cluster_size_cv_in","cluster_size_cv_out",
+    ]
+    # Coste + MOS
+    header += ["rtf_out","dnsmos_sig_out","dnsmos_bak_out","dnsmos_ovrl_out"]
+
     rows: List[Dict[str, Optional[float]]] = []
     n_ok = 0
 
@@ -201,6 +414,19 @@ def main():
                 def d(a, b):
                     return None if (a is None or b is None) else round(float(b) - float(a), 6)
 
+                # ---------- NUEVO: VAD + niveles + SNR ----------
+                mask_in, _  = _vad_mask_webrtc(xin, srin)
+                mask_out, _ = _vad_mask_webrtc(xout, srout)
+                vad_in  = _vad_stats_and_levels(xin, srin, mask_in)
+                vad_out = _vad_stats_and_levels(xout, srout, mask_out)
+
+                # ---------- NUEVO: embeddings/cluster ----------
+                emb_in  = _emb_cluster_metrics(xin, srin, mask_in)
+                emb_out = _emb_cluster_metrics(xout, srout, mask_out)
+
+                # ---------- NUEVO: MOS no intrusivo (sobre 'out') ----------
+                mos_out = _maybe_dnsmos(xout, srout)
+
                 row.update({
                     "rel_enh": rel_enh, "backend": backend, "preset": preset, "rel_prep": rel_prep,
                     "sr_in": m_in["sr_hz"], "sr_out": m_out["sr_hz"],
@@ -219,6 +445,46 @@ def main():
                     "delta_centroid_hz": round(m_out["spec_centroid_hz"] - m_in["spec_centroid_hz"], 6),
                     "lufs_in": m_in["lufs"], "lufs_out": m_out["lufs"], "delta_lufs": d(m_in["lufs"], m_out["lufs"]),
                     "srmr_in": m_in["srmr"], "srmr_out": m_out["srmr"], "delta_srmr": d(m_in["srmr"], m_out["srmr"]),
+                    # NUEVO: VAD + niveles + SNR
+                    "vad_speech_ratio_in": vad_in["vad_speech_ratio"],
+                    "vad_speech_ratio_out": vad_out["vad_speech_ratio"],
+                    "delta_vad_speech_ratio": d(vad_in["vad_speech_ratio"], vad_out["vad_speech_ratio"]),
+                    "vad_seg_count_in": vad_in["vad_seg_count"],
+                    "vad_seg_count_out": vad_out["vad_seg_count"],
+                    "delta_vad_seg_count": d(vad_in["vad_seg_count"], vad_out["vad_seg_count"]),
+                    "vad_seg_mean_dur_in_s": vad_in["vad_seg_mean_dur_s"],
+                    "vad_seg_mean_dur_out_s": vad_out["vad_seg_mean_dur_s"],
+                    "delta_vad_seg_mean_dur_s": d(vad_in["vad_seg_mean_dur_s"], vad_out["vad_seg_mean_dur_s"]),
+                    "speech_level_in_dbfs": vad_in["speech_level_dbfs"],
+                    "speech_level_out_dbfs": vad_out["speech_level_dbfs"],
+                    "delta_speech_level_db": d(vad_in["speech_level_dbfs"], vad_out["speech_level_dbfs"]),
+                    "nonspeech_level_in_dbfs": vad_in["nonspeech_level_dbfs"],
+                    "nonspeech_level_out_dbfs": vad_out["nonspeech_level_dbfs"],
+                    "delta_nonspeech_level_db": d(vad_in["nonspeech_level_dbfs"], vad_out["nonspeech_level_dbfs"]),
+                    "speech_nonspeech_snr_in_db": vad_in["speech_nonspeech_snr_db"],
+                    "speech_nonspeech_snr_out_db": vad_out["speech_nonspeech_snr_db"],
+                    "delta_speech_nonspeech_snr_db": d(vad_in["speech_nonspeech_snr_db"], vad_out["speech_nonspeech_snr_db"]),
+                    # NUEVO: embeddings/cluster
+                    "emb_temporal_smoothness_in": emb_in["emb_temporal_smoothness"],
+                    "emb_temporal_smoothness_out": emb_out["emb_temporal_smoothness"],
+                    "delta_emb_temporal_smoothness": d(emb_in["emb_temporal_smoothness"], emb_out["emb_temporal_smoothness"]),
+                    "num_clusters_in": emb_in["num_clusters"],
+                    "num_clusters_out": emb_out["num_clusters"],
+                    "silhouette_in": emb_in["silhouette"],
+                    "silhouette_out": emb_out["silhouette"],
+                    "db_index_in": emb_in["db_index"],
+                    "db_index_out": emb_out["db_index"],
+                    "calinski_harabasz_in": emb_in["calinski_harabasz"],
+                    "calinski_harabasz_out": emb_out["calinski_harabasz"],
+                    "between_cluster_min_cos_in": emb_in["between_cluster_min_cos"],
+                    "between_cluster_min_cos_out": emb_out["between_cluster_min_cos"],
+                    "cluster_size_cv_in": emb_in["cluster_size_cv"],
+                    "cluster_size_cv_out": emb_out["cluster_size_cv"],
+                    # NUEVO: coste y MOS
+                    "rtf_out": None,
+                    "dnsmos_sig_out": mos_out["dnsmos_sig"],
+                    "dnsmos_bak_out": mos_out["dnsmos_bak"],
+                    "dnsmos_ovrl_out": mos_out["dnsmos_ovrl"],
                     "error": ""
                 })
                 n_ok += 1
@@ -244,7 +510,10 @@ def main():
                 continue
             key = (r["backend"], r["preset"])
             for col in ["delta_peak_db","delta_rms_db","delta_clip_pct","delta_crest",
-                        "delta_flat","delta_centroid_hz","delta_lufs","delta_srmr"]:
+                        "delta_flat","delta_centroid_hz","delta_lufs","delta_srmr",
+                        "delta_vad_speech_ratio","delta_vad_seg_count","delta_vad_seg_mean_dur_s",
+                        "delta_speech_level_db","delta_nonspeech_level_db","delta_speech_nonspeech_snr_db",
+                        "delta_emb_temporal_smoothness"]:
                 v = r.get(col)
                 if v is None or v == "" or str(v).lower() == "none":
                     continue
@@ -258,7 +527,10 @@ def main():
     with out_sum.open("w", newline="", encoding="utf-8") as f:
         sum_hdr = ["backend","preset","n_pairs",
                    "mean_delta_peak_db","mean_delta_rms_db","mean_delta_clip_pct","mean_delta_crest",
-                   "mean_delta_flat","mean_delta_centroid_hz","mean_delta_lufs","mean_delta_srmr"]
+                   "mean_delta_flat","mean_delta_centroid_hz","mean_delta_lufs","mean_delta_srmr",
+                   "mean_delta_vad_speech_ratio","mean_delta_vad_seg_count","mean_delta_vad_seg_mean_dur_s",
+                   "mean_delta_speech_level_db","mean_delta_nonspeech_level_db","mean_delta_speech_nonspeech_snr_db",
+                   "mean_delta_emb_temporal_smoothness"]
         wr = csv.DictWriter(f, fieldnames=sum_hdr); wr.writeheader()
         # we also need number of pairs per backend/preset
         pairs_per = {}
@@ -272,7 +544,10 @@ def main():
         for (b,p), sdict in sums.items():
             row = {"backend": b, "preset": p, "n_pairs": pairs_per.get((b,p), 0)}
             for col in ["delta_peak_db","delta_rms_db","delta_clip_pct","delta_crest",
-                        "delta_flat","delta_centroid_hz","delta_lufs","delta_srmr"]:
+                        "delta_flat","delta_centroid_hz","delta_lufs","delta_srmr",
+                        "delta_vad_speech_ratio","delta_vad_seg_count","delta_vad_seg_mean_dur_s",
+                        "delta_speech_level_db","delta_nonspeech_level_db","delta_speech_nonspeech_snr_db",
+                        "delta_emb_temporal_smoothness"]:
                 c = counts[(b,p)].get(col, 0)
                 m = (sdict[col] / c) if c > 0 else None
                 row["mean_"+col] = None if m is None else round(m, 6)
