@@ -69,7 +69,9 @@ class ClearerVoiceBackend(BackendBase):
             sf.write(inp, x.astype(np.float32), sr_in)
             # infer vía CLI
             cmd = self.cmd_tpl.format(inp=str(inp), outp=str(outp), preset=self.preset)
-            subprocess.run(shlex.split(cmd), check=True)
+            res = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+            if res.returncode != 0:
+                raise RuntimeError(f"ClearerVoice wrapper failed ({res.returncode})\nCMD: {cmd}\nSTDERR:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
             y_ret, sr_ret = sf.read(outp, always_2d=False)
 
         # mantiene mono. si quieres devolver estéreo, duplica canales aquí.
