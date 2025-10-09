@@ -28,7 +28,7 @@ def main():
 
     mode, api = _try_import_api()
     if api is None:
-        cli = shutil.which("clearervoice")
+        cli = shutil.which("clearvoice") or shutil.which("clearervoice")
         if not cli:
             sys.stderr.write("[clearervoice_cli] No Python API and no 'clearervoice' binary in PATH.\n")
             sys.exit(2)
