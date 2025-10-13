@@ -450,7 +450,7 @@ def main():
     n_ok = 0
 
     fmode = "a" if append_mode else "w"
-    with out_pairs.open("fmode", newline="", encoding="utf-8") as f:
+    with out_pairs.open(fmode, newline="", encoding="utf-8") as f:
         wr = csv.DictWriter(f, fieldnames=header)
         if not append_mode:
             wr.writeheader()
