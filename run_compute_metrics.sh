@@ -7,7 +7,7 @@
 #SBATCH -o logs/%x-%j.out
 #SBATCH -e logs/%x-%j.err
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-ta_.ijs0LKjh n 2}m  t -k=2
+#SBATCH --cpus-per-task=2
 elw-WÑE-rt,mhtnbbn}1+
 set -euo pipefail
 
