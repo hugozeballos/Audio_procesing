@@ -12,6 +12,13 @@ except Exception:
     print("Falta webrtcvad. Instala con: pip install webrtcvad", file=sys.stderr)
     sys.exit(1)
 
+import os, sys
+print("DBG:file", __file__)
+print("DBG:argv", sys.argv)
+print("DBG:cwd", os.getcwd())
+print("DBG:python", sys.executable)
+print("DBG:sys.path[0:3]", sys.path[0:3])
+
 # --- util: resample ligero (sin scipy/librosa) ---
 def resample_mono_16k(x: np.ndarray, sr_in: int) -> np.ndarray:
     if x.ndim == 2:
@@ -129,6 +136,12 @@ def main():
     ap.add_argument("--backup", action="store_true", help="Guardar .bak del CSV original.")
     args = ap.parse_args()
 
+    print("DBG:csv", args.csv_path)
+    print("DBG:audio_col", args.audio_col)
+    print("DBG:root", args.root)
+    print("DBG:aggr", args.aggr, "frame_ms", args.frame_ms)
+
+
     df = pd.read_csv(args.csv_path)
     vad_cols = [
         "vad_total_s",
@@ -146,19 +159,25 @@ def main():
 
     n_total = len(df)
     n_done = 0
+    print("DBG:columns", list(df.columns))
+    print("DBG:rows", len(df))
+
     for idx, row in df.iterrows():
+        print(f"DBG:row={idx}")
         # si ya están todas las VAD, saltar
         if row_has_all_vad(row, vad_cols):
             n_done += 1
             continue
 
         rel = str(row[args.audio_col]) if not pd.isna(row[args.audio_col]) else ""
+        print("DBG:rel", rel)
         if not rel:
             # dejar NaN si no hay audio
             continue
         wav_path = Path(rel)
         if args.root and not wav_path.is_absolute():
             wav_path = args.root / wav_path
+        print("DBG:wav_path", str(wav_path), "exists?", wav_path.exists())
 
         m = compute_vad_metrics(wav_path, aggressiveness=args.aggr, frame_ms=args.frame_ms)
         if m is None:
