@@ -1,0 +1,7 @@
+backend,preset,n_pairs,mean_delta_peak_db,mean_delta_rms_db,mean_delta_clip_pct,mean_delta_crest,mean_delta_flat,mean_delta_centroid_hz,mean_delta_lufs,mean_delta_srmr,mean_delta_vad_speech_ratio,mean_delta_vad_seg_count,mean_delta_vad_seg_mean_dur_s,mean_delta_speech_level_db,mean_delta_nonspeech_level_db,mean_delta_speech_nonspeech_snr_db,mean_delta_emb_temporal_smoothness
+base,medium,55,0.033164,-0.492618,0.0,0.715568,0.013587,63.844564,-0.109,0.876256,,,,,,,-0.030947
+clearervoice,medium,3,-0.044333,-0.085333,0.0,0.06118,0.005431,-50.613,0.040333,-1.118831,,,,,,,-0.053308
+deepfilternet,medium,55,-0.2054,-0.191673,0.0,0.009328,0.00231,47.148091,-0.060127,0.548285,,,,,,,-0.022722
+metricgan,medium,55,0.169145,0.335636,0.0,-0.209071,-0.000525,-89.264564,0.505873,0.705227,,,,,,,-0.01914
+resemble_enh,medium,55,0.0,0.004909,0.0,-0.005907,-2e-06,-0.647873,-0.000164,0.003673,,,,,,,0.000145
+sepformer,medium,55,0.160545,0.313018,0.0,-0.191224,-0.000397,-121.056655,0.510455,0.743228,,,,,,,-0.022674

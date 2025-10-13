@@ -117,6 +117,20 @@ def srmr_score(x: np.ndarray, sr: int) -> Optional[float]:
         return None
 
 # ---------- NUEVO: VAD + niveles ----------
+# --- resample ligero sin deps externas ---
+def _resample_linear(x: np.ndarray, sr_in: int, sr_out: int) -> np.ndarray:
+    if sr_in == sr_out:
+        return x
+    n_out = int(round(len(x) * sr_out / max(sr_in, 1)))
+    if n_out <= 1:
+        return x
+    xp = np.linspace(0.0, 1.0, num=len(x), endpoint=False, dtype=np.float64)
+    fp = x.astype(np.float64, copy=False)
+    x_new = np.linspace(0.0, 1.0, num=n_out, endpoint=False, dtype=np.float64)
+    y = np.interp(x_new, xp, fp).astype(np.float32, copy=False)
+    return np.clip(y, -1.0, 1.0)
+
+
 def _vad_mask_webrtc(x: np.ndarray, sr: int, frame_ms: int = 30, aggr: int = 2):
     """Devuelve (mask_bool, frame_sec) o (None, None) si no hay webrtcvad o SR no soportado."""
     if webrtcvad is None or sr not in (8000, 16000, 32000, 48000):
@@ -132,6 +146,32 @@ def _vad_mask_webrtc(x: np.ndarray, sr: int, frame_ms: int = 30, aggr: int = 2):
         flags.append(vad.is_speech(pcm, sr))
     mask = np.repeat(flags, hop)[:len(x)]
     return mask.astype(bool), frame_ms / 1000.0
+
+def _vad_mask_wrapped(x: np.ndarray, sr: int, backend: str = "webrtc", vad_resample: str = "48k"):
+    """
+    Aplica VAD con posible re-muestreo temporal.
+    backend: 'webrtc' (por ahora), 'silero' opcional si lo añades luego.
+    vad_resample: 'none' | '16k' | '48k' (recomendado 48k para WebRTC)
+    """
+    # elegir SR objetivo para VAD
+    tgt_sr = {"none": sr, "16k": 16000, "48k": 48000}.get(vad_resample, sr)
+    x_vad = _resample_linear(x, sr, tgt_sr) if tgt_sr != sr else x
+
+    if backend == "webrtc":
+        m_tgt, step = _vad_mask_webrtc(x_vad, tgt_sr)
+    else:
+        # placeholder por si luego añades otros backends
+        m_tgt, step = _vad_mask_webrtc(x_vad, tgt_sr)
+
+    if m_tgt is None:
+        return None, None
+
+    # mapear máscara de vuelta al SR original si se re-muestreó
+    if tgt_sr != sr:
+        m = _resample_linear(m_tgt.astype(np.float32), tgt_sr, sr) > 0.5
+        return m, step
+    return m_tgt, step
+
 
 def _vad_stats_and_levels(x: np.ndarray, sr: int, mask: Optional[np.ndarray]):
     """Dict con vad_speech_ratio, seg_count, seg_mean_dur_s y niveles speech/noise en dBFS + SNR."""
@@ -337,6 +377,13 @@ def main():
     ap.add_argument("--dataset-dir", required=True, help="Root dataset dir")
     ap.add_argument("--csv-out", default=None, help="Pairs CSV output")
     ap.add_argument("--csv-summary", default=None, help="Summary CSV output")
+
+    ap.add_argument("--vad-backend", default="webrtc", choices=["webrtc"],
+                    help="Backend VAD. Usaremos WebRTC.")
+    ap.add_argument("--vad-resample", default="48k", choices=["none","16k","48k"],
+                    help="SR temporal solo para VAD. Recomendado 48k con WebRTC.")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="No recalcula filas ya procesadas sin error.")
     args = ap.parse_args()
 
     base = Path(args.dataset_dir).resolve()
@@ -349,6 +396,18 @@ def main():
     out_pairs = Path(args.csv_out) if args.csv_out else (base / "enh" / "enh_metrics_pair.csv")
     out_pairs.parent.mkdir(parents=True, exist_ok=True)
     out_sum = Path(args.csv_summary) if args.csv_summary else (base / "enh" / "enh_metrics_pair_summary.csv")
+
+    # índice de ya procesados y modo append
+    done = set()
+    append_mode = out_pairs.exists()
+    if args.skip_existing and out_pairs.exists():
+        with out_pairs.open("r", encoding="utf-8") as f_done:
+            rd = csv.DictReader(f_done)
+            for r in rd:
+                if r.get("error", "") == "":
+                    rel = r.get("rel_enh", "")
+                    if rel:
+                        done.add(rel)
 
     header = [
         "rel_enh","backend","preset","rel_prep",
@@ -390,11 +449,16 @@ def main():
     rows: List[Dict[str, Optional[float]]] = []
     n_ok = 0
 
-    with out_pairs.open("w", newline="", encoding="utf-8") as f:
+    fmode = "a" if append_mode else "w"
+    with out_pairs.open("fmode", newline="", encoding="utf-8") as f:
         wr = csv.DictWriter(f, fieldnames=header)
-        wr.writeheader()
+        if not append_mode:
+            wr.writeheader()
 
         for enh in enh_files:
+            rel_enh = enh.relative_to(base).as_posix()
+            if args.skip_existing and rel_enh in done:
+                    continue
             row = dict.fromkeys(header, None)
             try:
                 rel_enh = enh.relative_to(base).as_posix()
@@ -426,8 +490,8 @@ def main():
                     return None if (a is None or b is None) else round(float(b) - float(a), 6)
 
                 # ---------- NUEVO: VAD + niveles + SNR ----------
-                mask_in, _  = _vad_mask_webrtc(xin, srin)
-                mask_out, _ = _vad_mask_webrtc(xout, srout)
+                mask_in,  _ = _vad_mask_wrapped(xin,  srin,  backend=args.vad_backend, vad_resample=args.vad_resample)
+                mask_out, _ = _vad_mask_wrapped(xout, srout, backend=args.vad_backend, vad_resample=args.vad_resample)
                 vad_in  = _vad_stats_and_levels(xin, srin, mask_in)
                 vad_out = _vad_stats_and_levels(xout, srout, mask_out)
 
