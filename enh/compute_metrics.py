@@ -399,6 +399,25 @@ def list_enh(root: Path) -> List[Path]:
     exts = {".wav", ".WAV"}  # agrega más si usas .flac
     return sorted(p for p in enh_root.rglob("*") if p.suffix in exts)
 
+def _align_mask(mask: Optional[np.ndarray], n: int) -> Optional[np.ndarray]:
+    if mask is None:
+        return None
+    m = int(mask.shape[0])
+    if m == n:
+        return mask.astype(bool, copy=False)
+    if m > n:
+        return mask[:n].astype(bool, copy=False)
+    # m < n: pad con False
+    return np.pad(mask.astype(bool, copy=False), (0, n - m), constant_values=False)
+
+def _vad_mask_wrapped(x: np.ndarray, sr: int, backend: str = "webrtc", vad_resample: str = "48k"):
+    ...
+    if tgt_sr != sr:
+        m = _resample_linear(m_tgt.astype(np.float32), tgt_sr, sr) > 0.5
+        return _align_mask(m, len(x)), step
+    return _align_mask(m_tgt, len(x)), step
+
+
 # ---------- main ----------
 
 def main():
@@ -523,6 +542,9 @@ def main():
                 # ---------- NUEVO: VAD + niveles + SNR ----------
                 mask_in,  _ = _vad_mask_wrapped(xin,  srin,  backend=args.vad_backend, vad_resample=args.vad_resample)
                 mask_out, _ = _vad_mask_wrapped(xout, srout, backend=args.vad_backend, vad_resample=args.vad_resample)
+                # asegurar por si acaso
+                mask_in  = _align_mask(mask_in,  len(xin))
+                mask_out = _align_mask(mask_out, len(xout))
                 vad_in  = _vad_stats_and_levels(xin, srin, mask_in)
                 vad_out = _vad_stats_and_levels(xout, srout, mask_out)
 
