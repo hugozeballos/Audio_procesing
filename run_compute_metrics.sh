@@ -37,8 +37,7 @@ python enh/compute_metrics.py \
   --csv-out "$METRICS_OUT" \
   --csv-summary "$(dirname "$METRICS_OUT")/$(basename "$METRICS_OUT" .csv)_summary.csv" \
   --vad-backend webrtc \
-  --vad-resample 48k \
-  --skip-existing
+  --vad-resample 48k 
 
 deactivate
 echo "[done] $METRICS_OUT"
