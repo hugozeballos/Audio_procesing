@@ -8,7 +8,7 @@
 #SBATCH -e logs/%x-%j.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-
+elw-WÑE-rt,mhtnbbn}1+
 set -euo pipefail
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
@@ -35,7 +35,10 @@ echo "[metrics] csv_out=$METRICS_OUT"
 python enh/compute_metrics.py \
   --dataset-dir "$DATASET_DIR" \
   --csv-out "$METRICS_OUT" \
-  --csv-summary "$(dirname "$METRICS_OUT")/$(basename "$METRICS_OUT" .csv)_summary.csv"
+  --csv-summary "$(dirname "$METRICS_OUT")/$(basename "$METRICS_OUT" .csv)_summary.csv" \
+  --vad-backend webrtc \
+  --vad-resample 48k \
+  --skip-existing
 
 deactivate
 echo "[done] $METRICS_OUT"
