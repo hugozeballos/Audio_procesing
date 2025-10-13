@@ -55,6 +55,35 @@ except Exception:
 
 EPS = 1e-12
 
+# ---- completeness: skip whole row only if all required metrics are present ----
+KEY_COLS = {"rel_enh","backend","preset","rel_prep","error"}
+OPTIONAL_COLS = {
+    # optional/costly or env-dependent metrics that should NOT block skipping
+    "rtf_out","dnsmos_sig_out","dnsmos_bak_out","dnsmos_ovrl_out",
+    "lufs_in","lufs_out","delta_lufs",
+    "srmr_in","srmr_out","delta_srmr",
+    "emb_temporal_smoothness_in","emb_temporal_smoothness_out","delta_emb_temporal_smoothness",
+    "num_clusters_in","num_clusters_out",
+    "silhouette_in","silhouette_out",
+    "db_index_in","db_index_out",
+    "calinski_harabasz_in","calinski_harabasz_out",
+    "between_cluster_min_cos_in","between_cluster_min_cos_out",
+    "cluster_size_cv_in","cluster_size_cv_out",
+}
+
+def _row_is_complete(row: dict, header_cols: List[str]) -> bool:
+    """True if all required (non-optional) columns are non-empty and error is empty."""
+    if row.get("error", "") != "":
+        return False
+    for c in header_cols:
+        if c in KEY_COLS or c in OPTIONAL_COLS:
+            continue
+        v = row.get(c, None)
+        if v in (None, "", "None"):
+            return False
+    return True
+
+
 # ---------- helpers (no external heavy deps) ----------
 
 def to_mono_float32(x: np.ndarray) -> np.ndarray:
@@ -397,18 +426,6 @@ def main():
     out_pairs.parent.mkdir(parents=True, exist_ok=True)
     out_sum = Path(args.csv_summary) if args.csv_summary else (base / "enh" / "enh_metrics_pair_summary.csv")
 
-    # índice de ya procesados y modo append
-    done = set()
-    append_mode = out_pairs.exists()
-    if args.skip_existing and out_pairs.exists():
-        with out_pairs.open("r", encoding="utf-8") as f_done:
-            rd = csv.DictReader(f_done)
-            for r in rd:
-                if r.get("error", "") == "":
-                    rel = r.get("rel_enh", "")
-                    if rel:
-                        done.add(rel)
-
     header = [
         "rel_enh","backend","preset","rel_prep",
         "sr_in","sr_out","dur_in_s","dur_out_s",
@@ -445,6 +462,20 @@ def main():
     ]
     # Coste + MOS
     header += ["rtf_out","dnsmos_sig_out","dnsmos_bak_out","dnsmos_ovrl_out"]
+
+    # índice de ya procesados y modo append (skip only if row is complete)
+    done = set()
+    append_mode = out_pairs.exists()
+    if args.skip_existing and out_pairs.exists():
+        with out_pairs.open("r", encoding="utf-8") as f_done:
+            rd = csv.DictReader(f_done)
+            prev_hdr = rd.fieldnames or []
+            for r in rd:
+                if _row_is_complete(r, prev_hdr):
+                    rel = r.get("rel_enh", "")
+                    if rel:
+                        done.add(rel)
+
 
     rows: List[Dict[str, Optional[float]]] = []
     n_ok = 0
