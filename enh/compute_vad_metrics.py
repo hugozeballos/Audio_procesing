@@ -54,7 +54,7 @@ def _vad_mask_webrtc(x: np.ndarray, sr: int, frame_ms: int = 30, aggr: int = 2):
         flags.append(vad.is_speech(pcm, sr))
     mask = np.repeat(flags, hop)[:len(x)]
     return mask.astype(bool), frame_ms / 1000.0
-#debug
+
 def _vad_mask_wrapped(x: np.ndarray, sr: int, vad_resample: str = "48k"):
     tgt_sr = {"none": sr, "16k": 16000, "48k": 48000}.get(vad_resample, sr)
     print("DBG:_vad_mask_wrapped vad_resample=", vad_resample, "sr=", sr, "tgt_sr=", tgt_sr)
