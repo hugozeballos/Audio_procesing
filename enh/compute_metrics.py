@@ -404,7 +404,6 @@ def main():
     ap.add_argument("--dataset-dir", required=True, help="Root dataset dir")
     ap.add_argument("--csv-out", default=None, help="Pairs CSV output")
     ap.add_argument("--csv-summary", default=None, help="Summary CSV output")
-    ap.add_argument("--csv-summary", default=None, help="Summary CSV output")
     ap.add_argument("--vad-backend", default="webrtc", choices=["webrtc"])
     ap.add_argument("--vad-resample", default="48k", choices=["none","16k","48k"])
     args = ap.parse_args()
